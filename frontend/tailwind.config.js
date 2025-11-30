@@ -1,16 +1,8 @@
-/** @type {import('tailwindcss').Config} */
-export default {
+module.exports = {
   content: [
     "./index.html",
-    "./src/**/*.{js,ts,jsx,tsx}", // Mówi Tailwindowi, aby skanował wszystkie pliki w 'src'
+    "./src/**/*.{ts,tsx}"
   ],
-  theme: {
-    extend: {
-      fontFamily: {
-        // Ustawia 'Inter' jako domyślną czcionkę, zgodną z naszym designem
-        sans: ['Inter', 'sans-serif'],
-      },
-    },
-  },
+  theme: { extend: {} },
   plugins: [],
 }
