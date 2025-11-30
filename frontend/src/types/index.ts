@@ -46,3 +46,4 @@ export interface Costume {
   imageUrl?: string; // Link do zdjęcia (zewnętrzny)
   description?: string;
 }
+

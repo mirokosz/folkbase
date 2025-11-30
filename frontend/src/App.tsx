@@ -9,6 +9,7 @@ import Repertoire from "./pages/repertoire/Repertoire";
 import Schedule from "./pages/schedule/Schedule";
 import Costumes from "./pages/costumes/Costumes";
 import Attendance from "./pages/attendance/Attendance";
+import QRScanner from "./pages/scanner/Scanner";
 
 export default function App() {
   return (
@@ -30,6 +31,7 @@ export default function App() {
               <Route path="/schedule" element={<Schedule />} />
               <Route path="/costumes" element={<Costumes />} />
               <Route path="/attendance" element={<Attendance />} />
+              <Route path="/scan" element={<QRScanner />} />
           </Route>
 
           {/* Przekierowanie wszystkich nieznanych tras do dashboardu */}

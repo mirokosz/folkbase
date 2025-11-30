@@ -7,6 +7,7 @@ import { pl } from "date-fns/locale";
 import { toDate } from "../utils/dates"; // Pamiętaj o naszym helperze!
 import { Users, Shirt, Music2, Calendar, MapPin, Clock, ArrowRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { QrCode } from "lucide-react";
 
 export default function Dashboard() {
   const { profile } = useAuth();
@@ -93,6 +94,20 @@ export default function Dashboard() {
         <div className="text-right hidden md:block">
             <p className="text-sm font-medium text-gray-400 uppercase tracking-wider">{format(new Date(), "EEEE, d MMMM", { locale: pl })}</p>
         </div>
+        <div className="flex items-center gap-3">
+        {/* Przycisk skanera */}
+        <button 
+            onClick={() => navigate('/scan')} 
+            className="flex items-center gap-2 bg-gray-900 text-white px-4 py-2 rounded-xl font-bold shadow-lg hover:bg-gray-800 transition"
+        >
+            <QrCode size={20} />
+            <span className="hidden sm:inline">Skanuj Obecność</span>
+        </button>
+        
+        <div className="text-right hidden md:block">
+            {/* ... data ... */}
+        </div>
+    </div>
       </div>
 
       {/* SEKCJA STATYSTYK (Karty) */}

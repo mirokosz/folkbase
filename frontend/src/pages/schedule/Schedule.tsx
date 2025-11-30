@@ -25,7 +25,7 @@ export default function Schedule() {
   const monthEnd = endOfMonth(monthStart);
   const startDate = startOfWeek(monthStart, { weekStartsOn: 1 });
   const endDate = endOfWeek(monthEnd, { weekStartsOn: 1 });
-  const today = startOfDay(new Date()); // Potrzebne do sprawdzania przeszłości
+  const today = startOfDay(new Date());
 
   const calendarDays = eachDayOfInterval({ start: startDate, end: endDate });
   const weekDays = ["Pon", "Wt", "Śr", "Czw", "Pt", "Sob", "Ndz"];
@@ -34,7 +34,6 @@ export default function Schedule() {
     const q = query(collection(db, "teams", "folkbase", "schedule"));
     const unsub = onSnapshot(q, (snapshot) => {
       const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as EventItem));
-      // Sortujemy wydarzenia po godzinie, żeby były w dobrej kolejności
       items.sort((a, b) => toDate(a.startDate).getTime() - toDate(b.startDate).getTime());
       setEvents(items);
     });
@@ -58,7 +57,6 @@ export default function Schedule() {
       setIsModalOpen(true);
   };
 
-  // --- NOWE STYLE GRADIENTOWE ---
   const getEventStyle = (type: string) => {
       const base = "border-l-4 shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5 truncate";
       switch(type) {
@@ -69,7 +67,6 @@ export default function Schedule() {
       }
   };
 
-  // Maksymalna liczba wydarzeń widoczna w komórce przed pokazaniem "+X więcej"
   const MAX_VISIBLE_EVENTS = 3;
 
   return (
@@ -79,7 +76,6 @@ export default function Schedule() {
         <div className="flex items-center gap-4 mb-4 sm:mb-0">
             <h1 className="text-3xl font-extrabold text-gray-800 capitalize flex items-baseline gap-3">
                 <span className="bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-purple-600">
-                    {/* ZMIANA TUTAJ: LLLL zamiast MMMM */}
                     {format(currentDate, "LLLL", { locale: pl })}
                 </span>
                 <span className="text-xl text-gray-400 font-medium">{format(currentDate, "yyyy")}</span>
@@ -95,7 +91,6 @@ export default function Schedule() {
 
       {/* KALENDARZ */}
       <div className="bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100 overflow-hidden flex flex-col flex-1">
-        {/* Dni tygodnia (Sticky header) */}
         <div className="grid grid-cols-7 border-b border-gray-100 bg-gray-50/80 backdrop-blur sticky top-0 z-10">
             {weekDays.map(day => (
                 <div key={day} className="py-3 text-center text-xs font-bold text-gray-400 uppercase tracking-widest">
@@ -104,12 +99,9 @@ export default function Schedule() {
             ))}
         </div>
 
-        {/* Siatka dni */}
         <div className="grid grid-cols-7 auto-rows-fr bg-gray-100 gap-px flex-1 min-h-[600px]"> 
             {calendarDays.map((day) => {
                 const allDayEvents = events.filter(e => isSameDay(toDate(e.startDate), day));
-                
-                // Logika przepełnienia (Overflow)
                 const visibleEvents = allDayEvents.slice(0, MAX_VISIBLE_EVENTS);
                 const hiddenEventsCount = allDayEvents.length - MAX_VISIBLE_EVENTS;
 
@@ -117,12 +109,10 @@ export default function Schedule() {
                 const isDayToday = isToday(day);
                 const isPast = isBefore(day, today);
                 
-                // Dynamiczne klasy tła
                 let cellBackground = "bg-white";
                 if (!isCurrentMonth) cellBackground = "bg-gray-50/50";
-                else if (isPast) cellBackground = "bg-gray-50"; // Przeszłość lekko szara
+                else if (isPast) cellBackground = "bg-gray-50";
 
-                // Specjalny styl dla "Dzisiaj"
                 const todayContainerStyle = isDayToday ? "ring-2 ring-indigo-400 ring-offset-2 z-10 shadow-lg" : "";
 
                 return (
@@ -135,7 +125,6 @@ export default function Schedule() {
                             ${(canManage && isCurrentMonth) ? 'hover:bg-indigo-50/40 cursor-pointer' : ''}
                         `}
                     >
-                        {/* Nagłówek dnia */}
                         <div className="flex justify-between items-start mb-2 shrink-0">
                             <span className={`
                                 text-lg font-bold w-9 h-9 flex items-center justify-center rounded-full transition-colors
@@ -152,7 +141,6 @@ export default function Schedule() {
                             )}
                         </div>
                         
-                        {/* Lista wydarzeń */}
                         <div className="space-y-1.5 flex-1">
                             {visibleEvents.map(event => (
                                 <div 
@@ -169,7 +157,6 @@ export default function Schedule() {
                                 </div>
                             ))}
                             
-                            {/* Licznik ukrytych wydarzeń */}
                             {hiddenEventsCount > 0 && (
                                 <div className="text-xs text-gray-500 font-medium text-center bg-gray-100/80 rounded-md py-1 cursor-pointer hover:bg-gray-200 transition">
                                     +{hiddenEventsCount} więcej...
@@ -182,7 +169,6 @@ export default function Schedule() {
         </div>
       </div>
 
-      {/* MODAL (Ten sam co wcześniej, kod poniżej jest bez zmian, ale musisz go mieć w pliku) */}
       {isModalOpen && (
           <EventModal 
             onClose={() => setIsModalOpen(false)} 
@@ -195,7 +181,6 @@ export default function Schedule() {
   );
 }
 
-// ... (Wklej tutaj komponent EventModal z poprzedniej wiadomości, nie zmienił się) ...
 function EventModal({ onClose, eventToEdit, initialDate, canManage }: any) {
     const defaultStart = initialDate ? new Date(initialDate.setHours(18, 0, 0, 0)) : new Date();
     const defaultEnd = initialDate ? new Date(initialDate.setHours(20, 0, 0, 0)) : new Date();
@@ -327,8 +312,7 @@ function EventModal({ onClose, eventToEdit, initialDate, canManage }: any) {
                         />
                     </div>
 
-                    {/* FOOTER MODALA */}
-                    {canManage ? (
+                    {canManage && (
                         <div className="flex justify-between pt-4 border-t border-gray-100 mt-2">
                             {eventToEdit ? (
                                 <button type="button" onClick={handleDelete} className="text-red-500 hover:bg-red-50 px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium transition">
@@ -342,10 +326,6 @@ function EventModal({ onClose, eventToEdit, initialDate, canManage }: any) {
                                     {eventToEdit ? "Zapisz zmiany" : "Dodaj wydarzenie"}
                                 </button>
                             </div>
-                        </div>
-                    ) : (
-                        <div className="text-center text-sm text-gray-400 pt-2 italic">
-                            Brak uprawnień do edycji tego wydarzenia.
                         </div>
                     )}
                 </form>
