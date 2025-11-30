@@ -60,10 +60,10 @@ export default function Schedule() {
   const getEventStyle = (type: string) => {
       const base = "border-l-4 shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5 truncate";
       switch(type) {
-          case 'rehearsal': return `${base} bg-gradient-to-r from-blue-50 to-white border-blue-500 text-blue-800`;
-          case 'concert': return `${base} bg-gradient-to-r from-purple-50 to-white border-purple-500 text-purple-800`;
-          case 'workshop': return `${base} bg-gradient-to-r from-orange-50 to-white border-orange-500 text-orange-800`;
-          default: return `${base} bg-gradient-to-r from-gray-50 to-white border-gray-400 text-gray-700`;
+          case 'rehearsal': return `${base} bg-gradient-to-r from-blue-50 to-white dark:from-blue-900 dark:to-slate-800 border-blue-500 text-blue-800 dark:text-blue-100`;
+          case 'concert': return `${base} bg-gradient-to-r from-purple-50 to-white dark:from-purple-900 dark:to-slate-800 border-purple-500 text-purple-800 dark:text-purple-100`;
+          case 'workshop': return `${base} bg-gradient-to-r from-orange-50 to-white dark:from-orange-900 dark:to-slate-800 border-orange-500 text-orange-800 dark:text-orange-100`;
+          default: return `${base} bg-gradient-to-r from-gray-50 to-white dark:from-slate-700 dark:to-slate-800 border-gray-400 text-gray-700 dark:text-gray-200`;
       }
   };
 
@@ -72,34 +72,34 @@ export default function Schedule() {
   return (
     <div className="space-y-6 h-full flex flex-col font-sans">
       {/* HEADER */}
-      <div className="flex flex-col sm:flex-row items-center justify-between bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+      <div className="flex flex-col sm:flex-row items-center justify-between bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 transition-colors">
         <div className="flex items-center gap-4 mb-4 sm:mb-0">
-            <h1 className="text-3xl font-extrabold text-gray-800 capitalize flex items-baseline gap-3">
-                <span className="bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-purple-600">
+            <h1 className="text-3xl font-extrabold text-gray-800 dark:text-white capitalize flex items-baseline gap-3">
+                <span className="bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-purple-600 dark:from-indigo-400 dark:to-purple-400">
                     {format(currentDate, "LLLL", { locale: pl })}
                 </span>
-                <span className="text-xl text-gray-400 font-medium">{format(currentDate, "yyyy")}</span>
+                <span className="text-xl text-gray-400 dark:text-slate-500 font-medium">{format(currentDate, "yyyy")}</span>
             </h1>
         </div>
         
-        <div className="flex items-center bg-gray-100/80 rounded-xl p-1.5 border border-gray-200 shadow-inner">
-            <button onClick={prevMonth} className="p-2 hover:bg-white hover:shadow-sm rounded-lg transition text-gray-600"><ChevronLeft size={20}/></button>
-            <button onClick={() => setCurrentDate(new Date())} className="text-sm font-bold px-4 text-gray-600 hover:text-indigo-600 transition">Dzisiaj</button>
-            <button onClick={nextMonth} className="p-2 hover:bg-white hover:shadow-sm rounded-lg transition text-gray-600"><ChevronRight size={20}/></button>
+        <div className="flex items-center bg-gray-100/80 dark:bg-slate-700 rounded-xl p-1.5 border border-gray-200 dark:border-slate-600 shadow-inner">
+            <button onClick={prevMonth} className="p-2 hover:bg-white dark:hover:bg-slate-600 hover:shadow-sm rounded-lg transition text-gray-600 dark:text-slate-300"><ChevronLeft size={20}/></button>
+            <button onClick={() => setCurrentDate(new Date())} className="text-sm font-bold px-4 text-gray-600 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-400 transition">Dzisiaj</button>
+            <button onClick={nextMonth} className="p-2 hover:bg-white dark:hover:bg-slate-600 hover:shadow-sm rounded-lg transition text-gray-600 dark:text-slate-300"><ChevronRight size={20}/></button>
         </div>
       </div>
 
       {/* KALENDARZ */}
-      <div className="bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100 overflow-hidden flex flex-col flex-1">
-        <div className="grid grid-cols-7 border-b border-gray-100 bg-gray-50/80 backdrop-blur sticky top-0 z-10">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100 dark:border-slate-700 overflow-hidden flex flex-col flex-1 transition-colors">
+        <div className="grid grid-cols-7 border-b border-gray-100 dark:border-slate-700 bg-gray-50/80 dark:bg-slate-900/50 backdrop-blur sticky top-0 z-10">
             {weekDays.map(day => (
-                <div key={day} className="py-3 text-center text-xs font-bold text-gray-400 uppercase tracking-widest">
+                <div key={day} className="py-3 text-center text-xs font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest">
                     {day}
                 </div>
             ))}
         </div>
 
-        <div className="grid grid-cols-7 auto-rows-fr bg-gray-100 gap-px flex-1 min-h-[600px]"> 
+        <div className="grid grid-cols-7 auto-rows-fr bg-gray-100 dark:bg-slate-700 gap-px flex-1 min-h-[600px]"> 
             {calendarDays.map((day) => {
                 const allDayEvents = events.filter(e => isSameDay(toDate(e.startDate), day));
                 const visibleEvents = allDayEvents.slice(0, MAX_VISIBLE_EVENTS);
@@ -109,11 +109,11 @@ export default function Schedule() {
                 const isDayToday = isToday(day);
                 const isPast = isBefore(day, today);
                 
-                let cellBackground = "bg-white";
-                if (!isCurrentMonth) cellBackground = "bg-gray-50/50";
-                else if (isPast) cellBackground = "bg-gray-50";
+                let cellBackground = "bg-white dark:bg-slate-800";
+                if (!isCurrentMonth) cellBackground = "bg-gray-50/50 dark:bg-slate-900/50";
+                else if (isPast) cellBackground = "bg-gray-50 dark:bg-slate-800/80";
 
-                const todayContainerStyle = isDayToday ? "ring-2 ring-indigo-400 ring-offset-2 z-10 shadow-lg" : "";
+                const todayContainerStyle = isDayToday ? "ring-2 ring-indigo-400 ring-offset-2 dark:ring-offset-slate-800 z-10 shadow-lg" : "";
 
                 return (
                     <div 
@@ -122,20 +122,20 @@ export default function Schedule() {
                         className={`
                             relative p-2 transition-all duration-200 group overflow-hidden flex flex-col
                             ${cellBackground} ${todayContainerStyle}
-                            ${(canManage && isCurrentMonth) ? 'hover:bg-indigo-50/40 cursor-pointer' : ''}
+                            ${(canManage && isCurrentMonth) ? 'hover:bg-indigo-50/40 dark:hover:bg-indigo-900/20 cursor-pointer' : ''}
                         `}
                     >
                         <div className="flex justify-between items-start mb-2 shrink-0">
                             <span className={`
                                 text-lg font-bold w-9 h-9 flex items-center justify-center rounded-full transition-colors
                                 ${isDayToday ? 'bg-indigo-600 text-white shadow-md' : 
-                                  isCurrentMonth ? (isPast ? 'text-gray-400' : 'text-gray-700 group-hover:text-indigo-700') : 'text-gray-300'}
+                                  isCurrentMonth ? (isPast ? 'text-gray-400 dark:text-slate-600' : 'text-gray-700 dark:text-slate-300 group-hover:text-indigo-700 dark:group-hover:text-indigo-400') : 'text-gray-300 dark:text-slate-600'}
                             `}>
                                 {format(day, "d")}
                             </span>
 
                             {canManage && isCurrentMonth && !isPast && (
-                                <button className="opacity-0 group-hover:opacity-100 bg-indigo-100 text-indigo-600 hover:bg-indigo-600 hover:text-white rounded-full transition-all p-1.5 shadow-sm scale-90 hover:scale-105">
+                                <button className="opacity-0 group-hover:opacity-100 bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-300 hover:bg-indigo-600 hover:text-white rounded-full transition-all p-1.5 shadow-sm scale-90 hover:scale-105">
                                     <Plus size={16} />
                                 </button>
                             )}
@@ -158,7 +158,7 @@ export default function Schedule() {
                             ))}
                             
                             {hiddenEventsCount > 0 && (
-                                <div className="text-xs text-gray-500 font-medium text-center bg-gray-100/80 rounded-md py-1 cursor-pointer hover:bg-gray-200 transition">
+                                <div className="text-xs text-gray-500 dark:text-slate-400 font-medium text-center bg-gray-100/80 dark:bg-slate-700 rounded-md py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-slate-600 transition">
                                     +{hiddenEventsCount} więcej...
                                 </div>
                             )}
@@ -181,6 +181,7 @@ export default function Schedule() {
   );
 }
 
+// --- MODAL ---
 function EventModal({ onClose, eventToEdit, initialDate, canManage }: any) {
     const defaultStart = initialDate ? new Date(initialDate.setHours(18, 0, 0, 0)) : new Date();
     const defaultEnd = initialDate ? new Date(initialDate.setHours(20, 0, 0, 0)) : new Date();
@@ -243,18 +244,18 @@ function EventModal({ onClose, eventToEdit, initialDate, canManage }: any) {
 
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all scale-100">
-                <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-                    <h3 className="font-bold text-gray-800 text-lg">
+            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all scale-100 border border-gray-100 dark:border-slate-700">
+                <div className="p-5 border-b border-gray-100 dark:border-slate-700 flex justify-between items-center bg-gray-50 dark:bg-slate-900/50">
+                    <h3 className="font-bold text-gray-800 dark:text-white text-lg">
                         {eventToEdit ? "Edytuj wydarzenie" : "Nowe wydarzenie"}
                     </h3>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition"><X size={24} /></button>
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-slate-300 transition"><X size={24} /></button>
                 </div>
 
                 <form onSubmit={handleSubmit} className="p-6 space-y-5">
                     <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-wider">Tytuł</label>
-                        <input required className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition outline-none" 
+                        <label className="block text-xs font-bold text-gray-500 dark:text-slate-400 uppercase mb-1.5 tracking-wider">Tytuł</label>
+                        <input required className="w-full border border-gray-300 dark:border-slate-600 dark:bg-slate-900 dark:text-white rounded-lg p-2.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition outline-none" 
                             placeholder="Np. Próba generalna"
                             value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} 
                             disabled={!canManage}
@@ -263,8 +264,8 @@ function EventModal({ onClose, eventToEdit, initialDate, canManage }: any) {
                     
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-wider">Typ</label>
-                            <select className="w-full border border-gray-300 rounded-lg p-2.5 bg-white focus:ring-2 focus:ring-indigo-500 outline-none" 
+                            <label className="block text-xs font-bold text-gray-500 dark:text-slate-400 uppercase mb-1.5 tracking-wider">Typ</label>
+                            <select className="w-full border border-gray-300 dark:border-slate-600 dark:bg-slate-900 dark:text-white rounded-lg p-2.5 bg-white focus:ring-2 focus:ring-indigo-500 outline-none" 
                                 value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})}
                                 disabled={!canManage}
                             >
@@ -275,10 +276,10 @@ function EventModal({ onClose, eventToEdit, initialDate, canManage }: any) {
                             </select>
                         </div>
                         <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-wider">Lokalizacja</label>
+                            <label className="block text-xs font-bold text-gray-500 dark:text-slate-400 uppercase mb-1.5 tracking-wider">Lokalizacja</label>
                             <div className="relative">
                                 <MapPin size={18} className="absolute top-3 left-3 text-gray-400" />
-                                <input className="w-full border border-gray-300 rounded-lg p-2.5 pl-10 focus:ring-2 focus:ring-indigo-500 outline-none" 
+                                <input className="w-full border border-gray-300 dark:border-slate-600 dark:bg-slate-900 dark:text-white rounded-lg p-2.5 pl-10 focus:ring-2 focus:ring-indigo-500 outline-none" 
                                     value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})}
                                     disabled={!canManage}
                                 />
@@ -288,15 +289,15 @@ function EventModal({ onClose, eventToEdit, initialDate, canManage }: any) {
 
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-wider">Start</label>
-                            <input type="datetime-local" required className="w-full border border-gray-300 rounded-lg p-2.5 text-sm outline-none" 
+                            <label className="block text-xs font-bold text-gray-500 dark:text-slate-400 uppercase mb-1.5 tracking-wider">Start</label>
+                            <input type="datetime-local" required className="w-full border border-gray-300 dark:border-slate-600 dark:bg-slate-900 dark:text-white rounded-lg p-2.5 text-sm outline-none" 
                                 value={formData.startDate} onChange={e => setFormData({...formData, startDate: e.target.value})}
                                 disabled={!canManage}
                             />
                         </div>
                         <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-wider">Koniec</label>
-                            <input type="datetime-local" required className="w-full border border-gray-300 rounded-lg p-2.5 text-sm outline-none" 
+                            <label className="block text-xs font-bold text-gray-500 dark:text-slate-400 uppercase mb-1.5 tracking-wider">Koniec</label>
+                            <input type="datetime-local" required className="w-full border border-gray-300 dark:border-slate-600 dark:bg-slate-900 dark:text-white rounded-lg p-2.5 text-sm outline-none" 
                                 value={formData.endDate} onChange={e => setFormData({...formData, endDate: e.target.value})}
                                 disabled={!canManage}
                             />
@@ -304,28 +305,32 @@ function EventModal({ onClose, eventToEdit, initialDate, canManage }: any) {
                     </div>
 
                     <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-wider">Opis</label>
-                        <textarea className="w-full border border-gray-300 rounded-lg p-2.5 h-24 focus:ring-2 focus:ring-indigo-500 outline-none resize-none" 
+                        <label className="block text-xs font-bold text-gray-500 dark:text-slate-400 uppercase mb-1.5 tracking-wider">Opis</label>
+                        <textarea className="w-full border border-gray-300 dark:border-slate-600 dark:bg-slate-900 dark:text-white rounded-lg p-2.5 h-24 focus:ring-2 focus:ring-indigo-500 outline-none resize-none" 
                             placeholder="Dodatkowe informacje..."
                             value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})}
                             disabled={!canManage}
                         />
                     </div>
 
-                    {canManage && (
-                        <div className="flex justify-between pt-4 border-t border-gray-100 mt-2">
+                    {canManage ? (
+                        <div className="flex justify-between pt-4 border-t border-gray-100 dark:border-slate-700 mt-2">
                             {eventToEdit ? (
-                                <button type="button" onClick={handleDelete} className="text-red-500 hover:bg-red-50 px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium transition">
+                                <button type="button" onClick={handleDelete} className="text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium transition">
                                     <Trash2 size={18} /> Usuń
                                 </button>
                             ) : <div></div>}
                             
                             <div className="flex gap-3">
-                                <button type="button" onClick={onClose} className="px-5 py-2.5 text-gray-600 hover:bg-gray-100 rounded-lg font-medium transition">Anuluj</button>
-                                <button type="submit" className="px-5 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 shadow-lg shadow-indigo-200 font-medium transition">
+                                <button type="button" onClick={onClose} className="px-5 py-2.5 text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg font-medium transition">Anuluj</button>
+                                <button type="submit" className="px-5 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 shadow-lg shadow-indigo-200 dark:shadow-none font-medium transition">
                                     {eventToEdit ? "Zapisz zmiany" : "Dodaj wydarzenie"}
                                 </button>
                             </div>
+                        </div>
+                    ) : (
+                        <div className="text-center text-sm text-gray-400 pt-2 italic">
+                            Brak uprawnień do edycji tego wydarzenia.
                         </div>
                     )}
                 </form>

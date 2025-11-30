@@ -12,6 +12,16 @@ export interface MemberProfile {
   status: "active" | "pending" | "disabled";
   phone?: string;
   joinedAt?: any; // Timestamp z Firestore
+  birthDate?: string; // Format YYYY-MM-DD
+  placeOfBirth?: string;
+  pesel?: string;
+  idNumber?: string; // Nr dowodu
+  address?: string; // Ulica, miasto, kod
+  height?: number; // Wzrost w cm
+  joinDate?: string; // Data wstąpienia YYYY-MM-DD
+  
+  // Pola techniczne
+  createdAt?: any;
 }
 
 export interface RepertoireItem {

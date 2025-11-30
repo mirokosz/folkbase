@@ -1,83 +1,82 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { auth } from "../../services/firebase";
+import { useNavigate, useLocation } from "react-router-dom";
+// ZMIANA: Przywracamy bezpośredni import z Firebase
 import { signInWithEmailAndPassword } from "firebase/auth";
+import { auth } from "../../services/firebase";
 
 export default function Login() {
-  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(false); // Dodano stan ładowania
+  const navigate = useNavigate();
+  const location = useLocation();
+  const from = location.state?.from?.pathname || "/dashboard";
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
     setLoading(true);
-
     try {
+      // ZMIANA: Używamy funkcji z SDK Firebase, a nie z contextu
       await signInWithEmailAndPassword(auth, email, password);
-      navigate("/dashboard");
-    } catch (err: any) {
-      console.error(err);
-      setError("Nie udało się zalogować. Sprawdź dane.");
+      navigate(from, { replace: true });
+    } catch (error) {
+      console.error("Błąd logowania:", error);
+      alert("Nie udało się zalogować. Sprawdź dane.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-      <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8">
-        <h2 className="text-2xl font-bold text-center text-gray-800 mb-6">
-          Zaloguj się do FolkBase
-        </h2>
-
-        {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4 text-sm">
-            {error}
+    <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-slate-900 transition-colors font-sans">
+      <div className="px-8 py-8 text-left bg-white dark:bg-slate-800 shadow-xl rounded-2xl border border-gray-200 dark:border-slate-700 w-full max-w-md transition-colors">
+        <h3 className="text-2xl font-bold text-center text-gray-800 dark:text-white mb-6">Zaloguj się do FolkBase</h3>
+        <form onSubmit={handleSubmit}>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-2" htmlFor="email">Email</label>
+              <input
+                type="email"
+                placeholder="wpisz@email.com"
+                className="w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:border-transparent
+                           bg-gray-50 dark:bg-slate-900
+                           text-gray-900 dark:text-white
+                           border-gray-200 dark:border-slate-600
+                           placeholder-gray-400 dark:placeholder-slate-500 transition-all"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-2" htmlFor="password">Hasło</label>
+              <input
+                type="password"
+                placeholder="••••••••"
+                className="w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:border-transparent
+                           bg-gray-50 dark:bg-slate-900
+                           text-gray-900 dark:text-white
+                           border-gray-200 dark:border-slate-600
+                           placeholder-gray-400 dark:placeholder-slate-500 transition-all"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+            </div>
+            <div>
+              <button 
+                type="submit"
+                disabled={loading}
+                className="w-full px-4 py-3 mt-4 font-bold text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 transition-colors shadow-md hover:shadow-lg disabled:opacity-70"
+              >
+                  {loading ? "Logowanie..." : "Zaloguj się"}
+              </button>
+            </div>
           </div>
-        )}
-
-        <form onSubmit={handleLogin} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-            <input
-              type="email"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              placeholder="jan.kowalski@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Hasło</label>
-            <input
-              type="password"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 transition disabled:bg-indigo-300"
-          >
-            {loading ? "Logowanie..." : "Zaloguj się"}
-          </button>
         </form>
-
-        {/* USUNIĘTO sekcję z linkiem do rejestracji */}
-        
-        <div className="mt-6 text-center text-xs text-gray-400">
-          Nie masz konta? Skontaktuj się z administratorem zespołu.
-        </div>
+          <p className="mt-6 text-xs text-center text-gray-500 dark:text-slate-400">
+              Nie masz konta? Skontaktuj się z administratorem zespołu.
+          </p>
       </div>
     </div>
   );

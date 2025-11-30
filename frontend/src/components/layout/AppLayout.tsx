@@ -3,14 +3,15 @@ import Sidebar from "./Sidebar";
 
 export default function AppLayout() {
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    // ZMIANA TUTAJ: Dodano 'dark:bg-slate-900' oraz 'transition-colors'
+    <div className="flex min-h-screen bg-gray-50 dark:bg-slate-900 transition-colors duration-300">
+      
       {/* Sidebar na sztywno po lewej */}
       <Sidebar />
 
-      {/* Główna zawartość przesunięta o szerokość Sidebaru */}
+      {/* Główna zawartość */}
       <main className="flex-1 ml-64 p-8">
         <Outlet /> 
-        {/* Tutaj React Router "wstrzyknie" komponent Dashboard, Members itd. */}
       </main>
     </div>
   );
