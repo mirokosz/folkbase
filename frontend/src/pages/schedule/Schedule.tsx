@@ -10,6 +10,8 @@ import { EventItem } from "../../types";
 import { useAuth } from "../../context/AuthContext";
 import { toDate } from "../../utils/dates";
 import { ChevronLeft, ChevronRight, Plus, MapPin, X, Trash2 } from "lucide-react";
+// NOWY IMPORT
+import { sendNotificationToAll } from "../../utils/emailNotification";
 
 export default function Schedule() {
   const { profile } = useAuth();
@@ -71,7 +73,6 @@ export default function Schedule() {
 
   return (
     <div className="space-y-6 h-full flex flex-col font-sans">
-      {/* HEADER */}
       <div className="flex flex-col sm:flex-row items-center justify-between bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 transition-colors">
         <div className="flex items-center gap-4 mb-4 sm:mb-0">
             <h1 className="text-3xl font-extrabold text-gray-800 dark:text-white capitalize flex items-baseline gap-3">
@@ -89,7 +90,6 @@ export default function Schedule() {
         </div>
       </div>
 
-      {/* KALENDARZ */}
       <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100 dark:border-slate-700 overflow-hidden flex flex-col flex-1 transition-colors">
         <div className="grid grid-cols-7 border-b border-gray-100 dark:border-slate-700 bg-gray-50/80 dark:bg-slate-900/50 backdrop-blur sticky top-0 z-10">
             {weekDays.map(day => (
@@ -181,7 +181,6 @@ export default function Schedule() {
   );
 }
 
-// --- MODAL ---
 function EventModal({ onClose, eventToEdit, initialDate, canManage }: any) {
     const defaultStart = initialDate ? new Date(initialDate.setHours(18, 0, 0, 0)) : new Date();
     const defaultEnd = initialDate ? new Date(initialDate.setHours(20, 0, 0, 0)) : new Date();
@@ -199,6 +198,8 @@ function EventModal({ onClose, eventToEdit, initialDate, canManage }: any) {
         startDate: formatDateForInput(defaultStart),
         endDate: formatDateForInput(defaultEnd),
     });
+    // Nowy stan checkboxa powiadomień
+    const [sendEmail, setSendEmail] = useState(false);
 
     useEffect(() => {
         if (eventToEdit) {
@@ -226,6 +227,16 @@ function EventModal({ onClose, eventToEdit, initialDate, canManage }: any) {
                 await updateDoc(doc(db, "teams", "folkbase", "schedule", eventToEdit.id), payload);
             } else {
                 await addDoc(collection(db, "teams", "folkbase", "schedule"), payload);
+                
+                // --- WYSYŁKA ---
+                if (sendEmail) {
+                    await sendNotificationToAll({
+                        type: "Nowe Wydarzenie",
+                        title: formData.title,
+                        message: `Kiedy: ${format(new Date(formData.startDate), "dd.MM.yyyy HH:mm")}, Gdzie: ${formData.location}`
+                    });
+                    alert("Zapisano i wysłano powiadomienia!");
+                }
             }
             onClose();
         } catch (error) {
@@ -312,6 +323,20 @@ function EventModal({ onClose, eventToEdit, initialDate, canManage }: any) {
                             disabled={!canManage}
                         />
                     </div>
+
+                    {/* CHECKBOX DLA MAILA (Tylko przy tworzeniu nowego) */}
+                    {canManage && !eventToEdit && (
+                        <div className="flex items-center gap-2 pt-2">
+                            <input 
+                                type="checkbox" 
+                                id="sendEmailSchedule" 
+                                checked={sendEmail} 
+                                onChange={e => setSendEmail(e.target.checked)}
+                                className="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
+                            />
+                            <label htmlFor="sendEmailSchedule" className="text-sm text-gray-600 dark:text-slate-300">Wyślij powiadomienie e-mail</label>
+                        </div>
+                    )}
 
                     {canManage ? (
                         <div className="flex justify-between pt-4 border-t border-gray-100 dark:border-slate-700 mt-2">

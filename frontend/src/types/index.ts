@@ -44,6 +44,8 @@ export interface EventItem {
   location: string;
   description?: string;
   createdBy?: string; // ID instruktora, który dodał
+  attendees?: string[];
+  program?: ProgramItem[];
 }
 
 export interface Costume {
@@ -56,4 +58,31 @@ export interface Costume {
   imageUrl?: string; // Link do zdjęcia (zewnętrzny)
   description?: string;
 }
+export interface CostumeAssignment {
+  id: string;
+  costumeId: string; // ID stroju z magazynu (żeby wiedzieć co oddać)
+  costumeName: string; // Kopia nazwy (żeby nie robić miliona zapytań)
+  assignedDate: any; // Data wydania
+  notes?: string; // Uwagi (np. "Brak jednego guzika")
+}
 
+export interface Poll {
+  id: string;
+  question: string;
+  options: string[]; // np. ["Tak", "Nie", "Może"]
+  // Mapa głosów: Klucz to UID użytkownika, Wartość to index wybranej opcji (0, 1, 2...)
+  votes: { [userId: string]: number }; 
+  isActive: boolean;
+  createdAt: any;
+  createdBy: string;
+}
+
+export interface ProgramItem {
+  id: string; // Unikalny ID elementu (np. timestamp)
+  type: 'repertoire' | 'break' | 'announcement'; // Typ elementu
+  title: string; // Nazwa utworu lub "Przerwa"
+  duration: number; // Czas w minutach
+  description?: string; // Notatka dla konferansjera/akustyka
+  costume?: string; // Jaki strój jest potrzebny
+  repertoireId?: string; // Link do repertuaru (opcjonalne)
+}

@@ -11,6 +11,8 @@ import Costumes from "./pages/costumes/Costumes";
 import Attendance from "./pages/attendance/Attendance";
 import QRScanner from "./pages/scanner/Scanner";
 import Profile from "./pages/profile/Profile";
+import Polls from "./pages/polls/Polls";
+import ConcertPlanner from "./pages/concerts/ConcertPlanner";
 import { ThemeProvider } from "./context/ThemeContext";
 
 export default function App() {
@@ -37,6 +39,8 @@ export default function App() {
               <Route path="/scan" element={<QRScanner />} />
               <Route path="/profile" element={<Profile />} />
               <Route path="/profile/:id" element={<Profile />} />
+              <Route path="/polls" element={<Polls />} />
+              <Route path="/concerts" element={<ConcertPlanner />} />
           </Route>
 
           {/* Przekierowanie wszystkich nieznanych tras do dashboardu */}

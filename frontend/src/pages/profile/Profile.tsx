@@ -5,6 +5,7 @@ import { db } from "../../services/firebase";
 import { MemberProfile } from "../../types";
 import { User, Phone, MapPin, Calendar, Ruler, Hash, Mail, Edit2, Save, X, ArrowLeft } from "lucide-react";
 import { useParams, useNavigate } from "react-router-dom";
+import CostumeManager from "./CostumeManager"; // <--- NOWY IMPORT
 
 export default function Profile() {
   const { user, profile: currentUserProfile } = useAuth(); 
@@ -43,7 +44,7 @@ export default function Profile() {
       if (!targetId) return;
       try {
           await updateDoc(doc(db, "teams", "folkbase", "members", targetId), formData);
-          // @ts-expect-error
+          // @ts-expect-error - ignorujemy brak wszystkich pól przy łączeniu
           setProfileData({ ...profileData, ...formData });
           setIsEditing(false);
           alert("Profil zaktualizowany!");
@@ -57,7 +58,7 @@ export default function Profile() {
   if (!profileData) return <div className="p-8 text-gray-500 dark:text-slate-400">Nie znaleziono profilu lub brak uprawnień.</div>;
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
+    <div className="max-w-5xl mx-auto space-y-6 pb-10">
       
       {id && (
           <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-gray-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition mb-4">
@@ -103,9 +104,10 @@ export default function Profile() {
         </div>
       </div>
 
-      {/* SZCZEGÓŁY */}
+      {/* SZCZEGÓŁY - GRID */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           
+          {/* KARTA 1: DANE OSOBOWE */}
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-200 dark:border-slate-700 p-6 transition-colors">
               <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2 border-b dark:border-slate-700 pb-2">
                   <User size={20} className="text-indigo-600 dark:text-indigo-400" /> Dane Osobowe
@@ -126,6 +128,7 @@ export default function Profile() {
               </div>
           </div>
 
+          {/* KARTA 2: DANE ZESPOŁOWE */}
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-200 dark:border-slate-700 p-6 transition-colors">
               <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2 border-b dark:border-slate-700 pb-2">
                   <Ruler size={20} className="text-indigo-600 dark:text-indigo-400" /> Parametry i Zespół
@@ -142,6 +145,14 @@ export default function Profile() {
                       value={formData.idNumber} onChange={(v: string) => setFormData({...formData, idNumber: v})} />
               </div>
           </div>
+
+          {/* --- NOWOŚĆ: MODUŁ STROJÓW (ROZCIĄGNIĘTY NA DOLE) --- */}
+          {profileData?.uid && (
+              <div className="md:col-span-2">
+                  <CostumeManager memberId={profileData.uid} />
+              </div>
+          )}
+
       </div>
 
       {isEditing && (

@@ -42,7 +42,7 @@ export default function Attendance() {
         const q = query(collection(db, "teams", "folkbase", "members"), orderBy("lastName"));
         const snap = await getDocs(q);
         const allMembers = snap.docs.map(d => ({id: d.id, ...d.data()} as MemberProfile));
-        const studentsOnly = allMembers.filter(m => m.role !== 'admin');
+        const studentsOnly = allMembers.filter(m => m.role !== 'admin' && m.role !== 'instructor');
         setMembers(studentsOnly);
     };
     fetchMembers();

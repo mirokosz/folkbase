@@ -1,7 +1,7 @@
 import { NavLink, Link } from "react-router-dom";
 import { 
   LayoutDashboard, Users, Shirt, CalendarDays, Music2, LogOut, ClipboardCheck,
-  Sun, Moon // <--- Dodaj ikony
+  Sun, Moon, BarChart2, Mic2 // <--- Dodaj ikony
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext"; // <--- Import hooka
@@ -15,6 +15,8 @@ export default function Sidebar() {
     { path: "/members", label: "Członkowie", icon: Users },
     { path: "/schedule", label: "Grafik", icon: CalendarDays },
     { path: "/attendance", label: "Obecność", icon: ClipboardCheck },
+    { path: "/polls", label: "Ankiety", icon: BarChart2 },
+    { path: "/concerts", label: "Planer Koncertów", icon: Mic2 },
     { path: "/repertoire", label: "Repertuar", icon: Music2 },
     { path: "/costumes", label: "Stroje", icon: Shirt },
   ];

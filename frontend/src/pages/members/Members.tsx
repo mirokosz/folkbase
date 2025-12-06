@@ -32,7 +32,7 @@ export default function Members() {
         const membersUnsub = onSnapshot(query(collection(db, "teams", "folkbase", "members"), orderBy("lastName")), async (membersSnap) => {
             let membersData = membersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as MemberProfile[];
 
-            membersData = membersData.filter(member => member.role !== 'admin');
+            membersData = membersData.filter(member => member.role !== 'admin' && member.role !== 'instructor');
 
             const scheduleSnap = await getDocs(collection(db, "teams", "folkbase", "schedule"));
             const pastEvents = scheduleSnap.docs
