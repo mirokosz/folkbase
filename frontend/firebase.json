@@ -41,7 +41,7 @@
     "singleProjectMode": true
   },
   "hosting": {
-    "public": "public",
+    "public": "dist",
     "ignore": [
       "firebase.json",
       "**/.*",
