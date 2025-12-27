@@ -3,7 +3,7 @@ import { User, onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "../services/firebase";
 
-// Definicja typu profilu użytkownika (to co masz w bazie)
+// POPRAWKA: Dodano pole photoUrl, aby Sidebar nie zgłaszał błędu
 interface UserProfile {
   uid: string;
   email: string;
@@ -11,11 +11,12 @@ interface UserProfile {
   lastName: string;
   role: "admin" | "instructor" | "member";
   status: "active" | "pending" | "disabled";
+  photoUrl?: string; // <--- Tego brakowało!
 }
 
 interface AuthContextType {
   user: User | null;         // Obiekt z Firebase Auth
-  profile: UserProfile | null; // Obiekt z Firestore (imie, rola)
+  profile: UserProfile | null; // Obiekt z Firestore (imie, rola, ZDJĘCIE)
   loading: boolean;
   logout: () => Promise<void>;
 }

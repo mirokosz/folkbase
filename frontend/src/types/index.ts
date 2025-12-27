@@ -10,6 +10,7 @@ export interface MemberProfile {
   email: string;
   role: UserRole;
   status: "active" | "pending" | "disabled";
+  photoUrl?: string;
   phone?: string;
   joinedAt?: any; // Timestamp z Firestore
   birthDate?: string; // Format YYYY-MM-DD

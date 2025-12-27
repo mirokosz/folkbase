@@ -3,7 +3,7 @@ import { collection, onSnapshot, query, orderBy, setDoc, doc, serverTimestamp, d
 import { initializeApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword, signOut } from "firebase/auth";
 import { db, firebaseConfig } from "../../services/firebase";
-import { MemberProfile } from "../../types";
+import { MemberProfile, UserRole } from "../../types"; // Dodano import UserRole
 import { useAuth } from "../../context/AuthContext";
 import { Plus, Search, Phone, Mail, Trash2, Pencil, User } from "lucide-react";
 import { toDate } from "../../utils/dates";
@@ -30,9 +30,12 @@ export default function Members() {
   useEffect(() => {
     const fetchData = async () => {
         const membersUnsub = onSnapshot(query(collection(db, "teams", "folkbase", "members"), orderBy("lastName")), async (membersSnap) => {
-            let membersData = membersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as MemberProfile[];
+            // POPRAWKA 1: Zmieniono 'let' na 'const', ponieważ nie nadpisujemy już tej zmiennej
+            const membersData = membersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as MemberProfile[];
 
-            membersData = membersData.filter(member => member.role !== 'admin' && member.role !== 'instructor');
+            // --- FILTR UKRYWAJĄCY KADRĘ (ZAKOMENTOWANY) ---
+            // membersData = membersData.filter(member => member.role !== 'admin' && member.role !== 'instructor');
+            // ----------------------------------------------
 
             const scheduleSnap = await getDocs(collection(db, "teams", "folkbase", "schedule"));
             const pastEvents = scheduleSnap.docs
@@ -45,7 +48,7 @@ export default function Members() {
                 if (totalEvents === 0) return { ...member, attendanceRate: 0 };
                 
                 const attendedCount = pastEvents.filter(event => 
-                    event.attendees && event.attendees.includes(member.uid)
+                    event.attendees && event.attendees.includes(member.uid!) // Dodano ! dla pewności
                 ).length;
 
                 return {
@@ -225,10 +228,11 @@ export default function Members() {
 function MemberModal({ onClose, initialData }: { onClose: () => void, initialData: MemberProfile | null }) {
     const isEditing = !!initialData;
     
+    // POPRAWKA 2: Jawne typowanie stanu, aby TypeScript wiedział, że role mogą być różne
     const [formData, setFormData] = useState({ 
         firstName: '', lastName: '', email: '', phone: '',
         password: '',
-        role: 'member' 
+        role: 'member' as UserRole // <-- Wymuszenie typu UserRole
     });
     const [submitting, setSubmitting] = useState(false);
 
@@ -334,7 +338,7 @@ function MemberModal({ onClose, initialData }: { onClose: () => void, initialDat
                         <label className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase">Rola</label>
                         <select 
                             className="border dark:border-slate-600 bg-white dark:bg-slate-900 text-gray-800 dark:text-white p-2 rounded w-full outline-none focus:ring-2 focus:ring-indigo-500" 
-                            value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})}
+                            value={formData.role} onChange={e => setFormData({...formData, role: e.target.value as UserRole})}
                         >
                             <option value="member">Członek (Tancerz)</option>
                             <option value="instructor">Instruktor</option>

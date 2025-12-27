@@ -5,13 +5,14 @@ import {
   Shirt, 
   CalendarDays, 
   Music2, 
-  LogOut,
-  ClipboardCheck,
-  Sun,
-  Moon,
-  BarChart2,
+  LogOut, 
+  ClipboardCheck, 
+  Sun, 
+  Moon, 
+  BarChart2, 
   Mic2,
-  X // <--- Dodano ikonę X do zamykania
+  X,
+  Image
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
@@ -34,6 +35,7 @@ export default function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
     { path: "/concerts", label: "Planer Koncertów", icon: Mic2 },
     { path: "/repertoire", label: "Repertuar", icon: Music2 },
     { path: "/costumes", label: "Stroje", icon: Shirt },
+    { path: "/gallery", label: "Galeria", icon: Image },
   ];
 
   return (
@@ -75,17 +77,23 @@ export default function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
             </div>
           </div>
 
+          {/* PROFIL UŻYTKOWNIKA - ZDJĘCIE LUB INICJAŁY */}
           <Link 
             to="/profile" 
-            onClick={() => setIsOpen(false)} // Zamknij po kliknięciu w profil
+            onClick={() => setIsOpen(false)}
             className="p-4 border-b border-slate-800 bg-slate-800/50 hover:bg-slate-800 transition cursor-pointer block text-left group"
           >
             <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center text-sm font-bold shadow-md group-hover:scale-105 transition-transform">
-                    {profile?.firstName?.[0]}{profile?.lastName?.[0]}
+                <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center text-sm font-bold shadow-md group-hover:scale-105 transition-transform overflow-hidden border-2 border-slate-700">
+                    {/* Jeśli jest zdjęcie, pokaż je. Jeśli nie - inicjały */}
+                    {profile?.photoUrl ? (
+                        <img src={profile.photoUrl} alt="Avatar" className="w-full h-full object-cover" />
+                    ) : (
+                        <span>{profile?.firstName?.[0]}{profile?.lastName?.[0]}</span>
+                    )}
                 </div>
                 <div>
-                    <p className="text-sm font-medium group-hover:text-indigo-300 transition-colors">
+                    <p className="text-sm font-medium group-hover:text-indigo-300 transition-colors truncate w-32">
                         {profile?.firstName} {profile?.lastName}
                     </p>
                     <p className="text-xs text-slate-400 uppercase tracking-wider">{profile?.role}</p>
@@ -93,7 +101,7 @@ export default function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
             </div>
           </Link>
 
-          <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+          <nav className="flex-1 p-4 space-y-2 overflow-y-auto custom-scrollbar">
             {menuItems.map((item) => (
               <NavLink
                 key={item.path}
