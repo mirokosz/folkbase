@@ -9,8 +9,7 @@ import { db } from "../../services/firebase";
 import { EventItem } from "../../types";
 import { useAuth } from "../../context/AuthContext";
 import { toDate } from "../../utils/dates";
-import { ChevronLeft, ChevronRight, Plus, MapPin, X, Trash2 } from "lucide-react";
-// NOWY IMPORT
+import { ChevronLeft, ChevronRight, Plus, MapPin, X, Trash2, Calendar } from "lucide-react";
 import { sendNotificationToAll } from "../../utils/emailNotification";
 
 export default function Schedule() {
@@ -90,7 +89,8 @@ export default function Schedule() {
         </div>
       </div>
 
-      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100 dark:border-slate-700 overflow-hidden flex flex-col flex-1 transition-colors">
+      {/* --- WIDOK DESKTOPOWY (SIATKA) --- */}
+      <div className="hidden md:flex bg-white dark:bg-slate-800 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100 dark:border-slate-700 overflow-hidden flex-col flex-1 transition-colors">
         <div className="grid grid-cols-7 border-b border-gray-100 dark:border-slate-700 bg-gray-50/80 dark:bg-slate-900/50 backdrop-blur sticky top-0 z-10">
             {weekDays.map(day => (
                 <div key={day} className="py-3 text-center text-xs font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest">
@@ -152,7 +152,6 @@ export default function Schedule() {
                                         ${getEventStyle(event.type)}
                                     `}
                                 >
-                                    <span className="opacity-80 text-[10px] tracking-tight font-mono">{format(toDate(event.startDate), "HH:mm")}</span>
                                     <span className="truncate flex-1">{event.title}</span>
                                 </div>
                             ))}
@@ -167,6 +166,66 @@ export default function Schedule() {
                 );
             })}
         </div>
+      </div>
+
+      {/* --- WIDOK MOBILNY (AGENDA) --- */}
+      <div className="md:hidden space-y-4">
+         {/* Przycisk dodawania na mobile */}
+         {canManage && (
+             <button 
+                onClick={() => { setSelectedDateForNew(new Date()); setSelectedEvent(null); setIsModalOpen(true); }}
+                className="w-full py-3 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded-xl font-bold flex items-center justify-center gap-2"
+             >
+                 <Plus size={20} /> Dodaj wydarzenie
+             </button>
+         )}
+
+         {calendarDays.map(day => {
+             const dayEvents = events.filter(e => isSameDay(toDate(e.startDate), day));
+             if(dayEvents.length === 0) return null; // Ukrywamy dni bez wydarzeń
+             
+             const isDayToday = isToday(day);
+
+             return (
+                 <div key={day.toISOString()} className="space-y-2">
+                     <div className={`text-sm font-bold uppercase tracking-wider flex items-center gap-2 ${isDayToday ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-slate-400'}`}>
+                        {isDayToday && <div className="w-2 h-2 rounded-full bg-indigo-600"></div>}
+                        {format(day, "d MMMM (EEEE)", { locale: pl })}
+                     </div>
+                     
+                     <div className="space-y-2">
+                         {dayEvents.map(event => (
+                             <div 
+                                key={event.id}
+                                onClick={(e) => handleEventClick(e, event)}
+                                className={`
+                                    p-4 rounded-xl cursor-pointer bg-white dark:bg-slate-800 border-l-4 shadow-sm
+                                    ${getEventStyle(event.type).replace('truncate', '')} // Usuwamy truncate żeby na mobile zawijało tekst
+                                `}
+                             >
+                                 <div className="flex justify-between items-start">
+                                     <div>
+                                        <div className="font-bold text-base mb-1">{event.title}</div>
+                                        <div className="text-xs opacity-80 flex items-center gap-1.5">
+                                            <span>{format(toDate(event.startDate), "HH:mm")} - {format(toDate(event.endDate), "HH:mm")}</span>
+                                            {event.location && <span>• {event.location}</span>}
+                                        </div>
+                                     </div>
+                                 </div>
+                             </div>
+                         ))}
+                     </div>
+                 </div>
+             )
+         })}
+         
+         {/* Jeśli w całym miesiącu nie ma wydarzeń */}
+         {calendarDays.every(day => events.filter(e => isSameDay(toDate(e.startDate), day)).length === 0) && (
+             <div className="text-center py-10 text-gray-400 dark:text-slate-500 flex flex-col items-center gap-2">
+                 <Calendar size={48} className="opacity-20" />
+                 <span>Brak wydarzeń w tym miesiącu.</span>
+             </div>
+         )}
       </div>
 
       {isModalOpen && (
@@ -198,7 +257,6 @@ function EventModal({ onClose, eventToEdit, initialDate, canManage }: any) {
         startDate: formatDateForInput(defaultStart),
         endDate: formatDateForInput(defaultEnd),
     });
-    // Nowy stan checkboxa powiadomień
     const [sendEmail, setSendEmail] = useState(false);
 
     useEffect(() => {
@@ -228,7 +286,6 @@ function EventModal({ onClose, eventToEdit, initialDate, canManage }: any) {
             } else {
                 await addDoc(collection(db, "teams", "folkbase", "schedule"), payload);
                 
-                // --- WYSYŁKA ---
                 if (sendEmail) {
                     await sendNotificationToAll({
                         type: "Nowe Wydarzenie",
@@ -255,8 +312,8 @@ function EventModal({ onClose, eventToEdit, initialDate, canManage }: any) {
 
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all scale-100 border border-gray-100 dark:border-slate-700">
-                <div className="p-5 border-b border-gray-100 dark:border-slate-700 flex justify-between items-center bg-gray-50 dark:bg-slate-900/50">
+            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all scale-100 border border-gray-100 dark:border-slate-700 max-h-[90vh] overflow-y-auto">
+                <div className="p-5 border-b border-gray-100 dark:border-slate-700 flex justify-between items-center bg-gray-50 dark:bg-slate-900/50 sticky top-0 z-10 backdrop-blur">
                     <h3 className="font-bold text-gray-800 dark:text-white text-lg">
                         {eventToEdit ? "Edytuj wydarzenie" : "Nowe wydarzenie"}
                     </h3>
@@ -324,7 +381,6 @@ function EventModal({ onClose, eventToEdit, initialDate, canManage }: any) {
                         />
                     </div>
 
-                    {/* CHECKBOX DLA MAILA (Tylko przy tworzeniu nowego) */}
                     {canManage && !eventToEdit && (
                         <div className="flex items-center gap-2 pt-2">
                             <input 

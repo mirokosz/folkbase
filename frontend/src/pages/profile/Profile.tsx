@@ -4,7 +4,7 @@ import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { db } from "../../services/firebase";
 import { uploadAvatar } from "../../services/mediaService";
 import { MemberProfile, UserRole } from "../../types";
-import { User, Phone, MapPin, Calendar, Ruler, Hash, Mail, Edit2, Save, X, ArrowLeft, Camera, Loader2 } from "lucide-react";
+import { User, Phone, MapPin, Calendar, Ruler, Hash, Mail, Edit2, Save, X, ArrowLeft, Camera, Loader2} from "lucide-react";
 import { useParams, useNavigate } from "react-router-dom";
 import CostumeManager from "./CostumeManager";
 
@@ -25,6 +25,9 @@ export default function Profile() {
   const targetId = id ? id : user?.uid;
   const canEdit = isOwnProfile || currentUserProfile?.role === 'admin';
   const isAdmin = currentUserProfile?.role === 'admin';
+
+  // OCHRONA DANYCH: Wrażliwe sekcje widzi tylko Admin lub Właściciel
+  const canViewSensitive = isOwnProfile || isAdmin;
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -88,6 +91,7 @@ export default function Profile() {
           </button>
       )}
 
+      {/* --- NAGŁÓWEK (WSPÓLNY) --- */}
       <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 p-6 md:p-8 flex flex-col md:flex-row items-center md:items-start gap-8 relative transition-colors">
         
         {canEdit && (
@@ -129,7 +133,6 @@ export default function Profile() {
 
         <div className="text-center md:text-left space-y-3 flex-1 w-full">
             <div>
-                {/* ZMIANA: Imię i Nazwisko edytowalne TYLKO dla Admina */}
                 {isEditing && isAdmin ? (
                     <div className="flex gap-2 justify-center md:justify-start">
                         <input className="text-2xl font-bold border-b border-gray-300 dark:border-slate-600 bg-transparent outline-none w-1/3" value={formData.firstName} onChange={e => setFormData({...formData, firstName: e.target.value})} placeholder="Imię" />
@@ -162,10 +165,10 @@ export default function Profile() {
                 </span>
             </div>
            
+            {/* DANE KONTAKTOWE (Zostają widoczne dla wszystkich) */}
             <div className="pt-4 flex flex-col md:flex-row gap-6 text-gray-500 dark:text-slate-400 text-sm">
                 <div className="flex items-center gap-2">
                     <Mail size={16} /> 
-                    {/* ZMIANA: Email edytowalny TYLKO dla Admina */}
                     {isEditing && isAdmin ? (
                         <input className="border-b border-gray-300 dark:border-slate-600 bg-transparent outline-none" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
                     ) : profileData.email}
@@ -177,30 +180,41 @@ export default function Profile() {
                     ) : (profileData.phone || "Brak telefonu")}
                 </div>
             </div>
+
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 p-6 transition-colors">
-              <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2 border-b border-gray-100 dark:border-slate-700 pb-3">
-                  <User size={20} className="text-indigo-600 dark:text-indigo-400" /> Dane Osobowe
-              </h3>
-              
-              <div className="space-y-4">
-                  <InputGroup label="Data urodzenia" icon={<Calendar size={16}/>} isEditing={isEditing} 
-                      value={formData.birthDate} onChange={(v: string) => setFormData({...formData, birthDate: v})} type="date" />
+      {/* --- GRID Z DANYMI --- */}
+      {/* Jeśli widzimy tylko Parametry, to Grid ma 1 kolumnę (pełna szerokość). Jeśli widzimy wszystko - 2 kolumny */}
+      <div className={`grid grid-cols-1 ${canViewSensitive ? 'md:grid-cols-2' : ''} gap-6`}>
+          
+          {/* SEKCJA 1: DANE OSOBOWE - RENDEROWANA TYLKO DLA UPRAWNIONYCH */}
+          {canViewSensitive && (
+              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 p-6 transition-colors">
+                  <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2 border-b border-gray-100 dark:border-slate-700 pb-3">
+                      <User size={20} className="text-indigo-600 dark:text-indigo-400" /> Dane Osobowe
+                  </h3>
                   
-                  <InputGroup label="Miejsce urodzenia" icon={<MapPin size={16}/>} isEditing={isEditing} 
-                      value={formData.placeOfBirth} onChange={(v: string) => setFormData({...formData, placeOfBirth: v})} />
-                  
-                  <InputGroup label="PESEL" icon={<Hash size={16}/>} isEditing={isEditing} 
-                      value={formData.pesel} onChange={(v: string) => setFormData({...formData, pesel: v})} />
-                  
-                  <InputGroup label="Adres zamieszkania" icon={<MapPin size={16}/>} isEditing={isEditing} 
-                      value={formData.address} onChange={(v: string) => setFormData({...formData, address: v})} />
+                  <div className="space-y-4">
+                      <InputGroup label="Data urodzenia" icon={<Calendar size={16}/>} isEditing={isEditing} 
+                          value={formData.birthDate} onChange={(v: string) => setFormData({...formData, birthDate: v})} type="date" />
+                      
+                      <InputGroup label="Miejsce urodzenia" icon={<MapPin size={16}/>} isEditing={isEditing} 
+                          value={formData.placeOfBirth} onChange={(v: string) => setFormData({...formData, placeOfBirth: v})} />
+                      
+                      <InputGroup label="PESEL" icon={<Hash size={16}/>} isEditing={isEditing} 
+                          value={formData.pesel} onChange={(v: string) => setFormData({...formData, pesel: v})} />
+                      
+                      <InputGroup label="Numer Dowodu" icon={<Hash size={16}/>} isEditing={isEditing} 
+                          value={formData.idNumber} onChange={(v: string) => setFormData({...formData, idNumber: v})} />
+                      
+                      <InputGroup label="Adres zamieszkania" icon={<MapPin size={16}/>} isEditing={isEditing} 
+                          value={formData.address} onChange={(v: string) => setFormData({...formData, address: v})} />
+                  </div>
               </div>
-          </div>
+          )}
 
+          {/* SEKCJA 2: PARAMETRY (Zawsze widoczna) */}
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 p-6 transition-colors">
               <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2 border-b border-gray-100 dark:border-slate-700 pb-3">
                   <Ruler size={20} className="text-indigo-600 dark:text-indigo-400" /> Parametry i Zespół
@@ -212,13 +226,11 @@ export default function Profile() {
                   
                   <InputGroup label="Wzrost (cm)" icon={<Ruler size={16}/>} isEditing={isEditing} 
                       value={formData.height} onChange={(v: string) => setFormData({...formData, height: Number(v)})} type="number" />
-                  
-                  <InputGroup label="Numer Dowodu" icon={<Hash size={16}/>} isEditing={isEditing} 
-                      value={formData.idNumber} onChange={(v: string) => setFormData({...formData, idNumber: v})} />
               </div>
           </div>
 
-          {profileData?.uid && (
+          {/* SEKCJA 3: EKWIPUNEK - RENDEROWANA TYLKO DLA UPRAWNIONYCH */}
+          {canViewSensitive && profileData?.uid && (
               <div className="md:col-span-2">
                   <CostumeManager memberId={profileData.uid} />
               </div>

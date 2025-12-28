@@ -6,7 +6,7 @@ import { useAuth } from "../../context/AuthContext";
 import { toDate } from "../../utils/dates";
 import { format, isToday } from "date-fns";
 import { pl } from "date-fns/locale";
-import { ChevronRight, CheckCircle2, Circle, Users, ArrowLeft, QrCode } from "lucide-react";
+import { ChevronRight, CheckCircle2, Circle, Users, ArrowLeft, QrCode, Search } from "lucide-react";
 import QRCode from "react-qr-code";
 
 interface AttendanceEvent {
@@ -15,6 +15,7 @@ interface AttendanceEvent {
     type: string;
     startDate: any;
     attendees?: string[];
+    location?: string; // Zakładam, że to pole może istnieć, jeśli nie - nie zaszkodzi
 }
 
 export default function Attendance() {
@@ -24,11 +25,15 @@ export default function Attendance() {
   const [selectedEvent, setSelectedEvent] = useState<AttendanceEvent | null>(null);
   const [loading, setLoading] = useState(true);
   const [showQR, setShowQR] = useState(false);
+  
+  // NOWY STAN: Wyszukiwarka
+  const [searchTerm, setSearchTerm] = useState("");
 
   const canManage = profile?.role === 'admin' || profile?.role === 'instructor';
 
   useEffect(() => {
-    const q = query(collection(db, "teams", "folkbase", "schedule"), orderBy("startDate", "asc"));
+    // ZMIANA: Sortowanie desc (najnowsze na górze), żeby nie scrollować na dół
+    const q = query(collection(db, "teams", "folkbase", "schedule"), orderBy("startDate", "desc"));
     const unsub = onSnapshot(q, (snapshot) => {
         const allEvents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AttendanceEvent));
         setEvents(allEvents);
@@ -82,10 +87,38 @@ export default function Attendance() {
       await updateDoc(doc(db, "teams", "folkbase", "schedule", selectedEvent.id), { attendees: newAttendees });
   }
 
+  // NOWA FUNKCJA: Kolory pasków (zgodne z Grafikiem)
+  const getEventColorBorder = (type: string) => {
+      switch (type) {
+          case 'rehearsal': return 'border-l-blue-500';
+          case 'concert': return 'border-l-purple-500';
+          case 'workshop': return 'border-l-orange-500';
+          default: return 'border-l-gray-300';
+      }
+  };
+
   if (loading) return <div className="p-8 text-gray-500 dark:text-slate-400">Ładowanie dziennika...</div>;
 
-  // --- WIDOK 1: LISTA WYDARZEŃ ---
+  // --- WIDOK 1: LISTA WYDARZEŃ (ZMODYFIKOWANY) ---
   if (!selectedEvent) {
+      // 1. Filtrowanie
+      const filteredEvents = events.filter(e => 
+          e.title.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+
+      // 2. Grupowanie po miesiącach
+      const groupedEvents = filteredEvents.reduce((groups, event) => {
+          const date = toDate(event.startDate);
+          // Klucz np. "grudzień 2025"
+          const monthKey = format(date, "LLLL yyyy", { locale: pl }); 
+          
+          if (!groups[monthKey]) {
+              groups[monthKey] = [];
+          }
+          groups[monthKey].push(event);
+          return groups;
+      }, {} as Record<string, AttendanceEvent[]>);
+
       return (
           <div className="space-y-6">
               <div>
@@ -93,61 +126,94 @@ export default function Attendance() {
                   <p className="text-gray-500 dark:text-slate-400">Wybierz wydarzenie, aby sprawdzić listę.</p>
               </div>
 
-              <div className="grid gap-4">
-                  {events.map(event => {
-                      const date = toDate(event.startDate);
-                      const isTodayEvent = isToday(date);
-                      const presentCount = event.attendees?.length || 0;
+              {/* WYSZUKIWARKA */}
+              <div className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700">
+                  <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                      <input
+                          type="text"
+                          placeholder="Szukaj wydarzenia..."
+                          className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white transition-all"
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                      />
+                  </div>
+              </div>
 
-                      return (
-                          <div 
-                              key={event.id}
-                              onClick={() => setSelectedEvent(event)}
-                              className={`
-                                p-4 rounded-xl border flex items-center justify-between cursor-pointer transition hover:shadow-md hover:-translate-y-0.5
-                                ${isTodayEvent 
-                                    ? 'bg-white dark:bg-slate-800 border-indigo-500 ring-1 ring-indigo-500 shadow-indigo-100 dark:shadow-none' 
-                                    : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700'}
-                              `}
-                          >
-                              <div className="flex items-center gap-4">
-                                  <div className={`w-12 h-12 rounded-lg flex flex-col items-center justify-center font-bold ${isTodayEvent ? 'bg-indigo-600 text-white' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300'}`}>
-                                      <span className="text-[10px] uppercase">{format(date, "MMM", {locale: pl})}</span>
-                                      <span className="text-lg leading-none">{format(date, "d")}</span>
-                                  </div>
-                                  <div>
-                                      <h3 className="font-bold text-gray-800 dark:text-white">{event.title}</h3>
-                                      <p className="text-sm text-gray-500 dark:text-slate-400">{format(date, "EEEE, HH:mm", {locale: pl})}</p>
-                                  </div>
-                              </div>
-                              
-                              <div className="text-right">
-                                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600">
-                                      <Users size={14} className="text-gray-400 dark:text-slate-400" />
-                                      <span className="text-sm font-medium text-gray-700 dark:text-slate-200">{presentCount}</span>
-                                  </div>
-                                  <ChevronRight size={20} className="text-gray-300 dark:text-slate-600 inline-block ml-2" />
-                              </div>
+              {/* LISTA Z GRUPOWANIEM */}
+              <div className="space-y-8">
+                  {Object.entries(groupedEvents).map(([month, monthEvents]) => (
+                      <div key={month} className="space-y-3">
+                          {/* Nagłówek miesiąca */}
+                          <h2 className="text-sm font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider pl-1">
+                              {month}
+                          </h2>
+
+                          <div className="grid gap-3">
+                              {monthEvents.map(event => {
+                                  const date = toDate(event.startDate);
+                                  const isTodayEvent = isToday(date);
+                                  const presentCount = event.attendees?.length || 0;
+                                  const borderColor = getEventColorBorder(event.type);
+
+                                  return (
+                                      <div 
+                                          key={event.id}
+                                          onClick={() => setSelectedEvent(event)}
+                                          className={`
+                                              p-4 rounded-xl border flex items-center justify-between cursor-pointer transition hover:shadow-md hover:-translate-y-0.5
+                                              border-l-4 ${borderColor}
+                                              ${isTodayEvent 
+                                                  ? 'bg-white dark:bg-slate-800 border-t-indigo-500 border-r-indigo-500 border-b-indigo-500 ring-1 ring-indigo-500 shadow-indigo-100 dark:shadow-none' 
+                                                  : 'bg-white dark:bg-slate-800 border-t-gray-200 border-r-gray-200 border-b-gray-200 dark:border-t-slate-700 dark:border-r-slate-700 dark:border-b-slate-700'}
+                                          `}
+                                      >
+                                          <div className="flex items-center gap-4">
+                                              {/* Data Badge */}
+                                              <div className={`w-12 h-12 rounded-lg flex flex-col items-center justify-center font-bold ${isTodayEvent ? 'bg-indigo-600 text-white' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300'}`}>
+                                                  <span className="text-[10px] uppercase">{format(date, "MMM", {locale: pl})}</span>
+                                                  <span className="text-lg leading-none">{format(date, "d")}</span>
+                                              </div>
+                                              <div>
+                                                  <h3 className="font-bold text-gray-800 dark:text-white">{event.title}</h3>
+                                                  <p className="text-sm text-gray-500 dark:text-slate-400 capitalize">{format(date, "EEEE, HH:mm", {locale: pl})}</p>
+                                              </div>
+                                          </div>
+                                          
+                                          <div className="text-right">
+                                              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600">
+                                                  <Users size={14} className="text-gray-400 dark:text-slate-400" />
+                                                  <span className="text-sm font-medium text-gray-700 dark:text-slate-200">{presentCount}</span>
+                                              </div>
+                                              <ChevronRight size={20} className="text-gray-300 dark:text-slate-600 inline-block ml-2" />
+                                          </div>
+                                      </div>
+                                  )
+                              })}
                           </div>
-                      )
-                  })}
+                      </div>
+                  ))}
+
+                  {filteredEvents.length === 0 && (
+                      <div className="text-center py-8 text-gray-500">Brak wydarzeń.</div>
+                  )}
               </div>
           </div>
       );
   }
 
-  // --- WIDOK 2: SPRAWDZANIE ---
+  // --- WIDOK 2: SPRAWDZANIE (BEZ ZMIAN W LOGICE, TYLKO STYL) ---
   const presentCount = selectedEvent.attendees?.length || 0;
   
   return (
-      <div className="space-y-6 max-w-2xl mx-auto">
+      <div className="space-y-6 max-w-2xl mx-auto animate-in fade-in slide-in-from-right-4 duration-300">
           <div className="flex items-center gap-4 mb-6">
               <button onClick={() => setSelectedEvent(null)} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full transition">
                   <ArrowLeft size={24} className="text-gray-600 dark:text-slate-300" />
               </button>
               <div className="flex-1">
                    <h2 className="text-xl font-bold text-gray-800 dark:text-white">{selectedEvent.title}</h2>
-                   <p className="text-gray-500 dark:text-slate-400 text-sm">
+                   <p className="text-gray-500 dark:text-slate-400 text-sm capitalize">
                        {format(toDate(selectedEvent.startDate), "d MMMM, HH:mm", {locale: pl})}
                    </p>
               </div>
@@ -160,7 +226,7 @@ export default function Attendance() {
           {canManage && (
             <div className="flex gap-3">
                 <button onClick={() => setShowQR(true)} className="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-bold shadow-lg shadow-indigo-200 dark:shadow-none flex items-center justify-center gap-2 hover:bg-indigo-700 transition">
-                    <QrCode size={20} /> WYŚWIETL KOD QR
+                    <QrCode size={20} /> KOD QR
                 </button>
                 <button onClick={handleSelectAll} className="px-6 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 text-gray-600 dark:text-slate-300 py-3 rounded-xl font-medium hover:bg-gray-50 dark:hover:bg-slate-700 transition">
                     Zaznacz wszystkich
