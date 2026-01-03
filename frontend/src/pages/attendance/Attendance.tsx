@@ -15,7 +15,7 @@ interface AttendanceEvent {
     type: string;
     startDate: any;
     attendees?: string[];
-    location?: string; // Zakładam, że to pole może istnieć, jeśli nie - nie zaszkodzi
+    location?: string;
 }
 
 export default function Attendance() {
@@ -26,13 +26,14 @@ export default function Attendance() {
   const [loading, setLoading] = useState(true);
   const [showQR, setShowQR] = useState(false);
   
-  // NOWY STAN: Wyszukiwarka
+  // Stan Wyszukiwarki
   const [searchTerm, setSearchTerm] = useState("");
 
+  // ZMIANA: Dodano 'instructor' do uprawnień zarządzania
   const canManage = profile?.role === 'admin' || profile?.role === 'instructor';
 
   useEffect(() => {
-    // ZMIANA: Sortowanie desc (najnowsze na górze), żeby nie scrollować na dół
+    // Sortowanie malejąco (najnowsze na górze)
     const q = query(collection(db, "teams", "folkbase", "schedule"), orderBy("startDate", "desc"));
     const unsub = onSnapshot(q, (snapshot) => {
         const allEvents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AttendanceEvent));
@@ -47,7 +48,9 @@ export default function Attendance() {
         const q = query(collection(db, "teams", "folkbase", "members"), orderBy("lastName"));
         const snap = await getDocs(q);
         const allMembers = snap.docs.map(d => ({id: d.id, ...d.data()} as MemberProfile));
-        const studentsOnly = allMembers.filter(m => m.role !== 'admin' && m.role !== 'instructor');
+        // Filtrujemy, aby na liście obecności byli tylko 'zwykli' członkowie (opcjonalne)
+        // Jeśli chcesz widzieć wszystkich, usuń linię .filter
+        const studentsOnly = allMembers.filter(m => m.role !== 'admin'); 
         setMembers(studentsOnly);
     };
     fetchMembers();
@@ -65,6 +68,7 @@ export default function Attendance() {
           newAttendees = [...currentAttendees, memberId];
       }
 
+      // Aktualizacja lokalna (optymistyczna)
       setSelectedEvent({ ...selectedEvent, attendees: newAttendees });
 
       try {
@@ -81,13 +85,14 @@ export default function Attendance() {
       if (!selectedEvent || !canManage) return;
       const allIds = members.map(m => m.uid!);
       const allPresent = allIds.every(id => selectedEvent.attendees?.includes(id));
+      
+      // Jeśli wszyscy są obecni -> odznacz wszystkich. W przeciwnym razie -> zaznacz wszystkich.
       const newAttendees = allPresent ? [] : allIds;
 
       setSelectedEvent({ ...selectedEvent, attendees: newAttendees });
       await updateDoc(doc(db, "teams", "folkbase", "schedule", selectedEvent.id), { attendees: newAttendees });
   }
 
-  // NOWA FUNKCJA: Kolory pasków (zgodne z Grafikiem)
   const getEventColorBorder = (type: string) => {
       switch (type) {
           case 'rehearsal': return 'border-l-blue-500';
@@ -99,17 +104,15 @@ export default function Attendance() {
 
   if (loading) return <div className="p-8 text-gray-500 dark:text-slate-400">Ładowanie dziennika...</div>;
 
-  // --- WIDOK 1: LISTA WYDARZEŃ (ZMODYFIKOWANY) ---
+  // --- WIDOK 1: LISTA WYDARZEŃ (Z GRUPOWANIEM I WYSZUKIWARKĄ) ---
   if (!selectedEvent) {
-      // 1. Filtrowanie
       const filteredEvents = events.filter(e => 
           e.title.toLowerCase().includes(searchTerm.toLowerCase())
       );
 
-      // 2. Grupowanie po miesiącach
+      // Grupowanie po miesiącach
       const groupedEvents = filteredEvents.reduce((groups, event) => {
           const date = toDate(event.startDate);
-          // Klucz np. "grudzień 2025"
           const monthKey = format(date, "LLLL yyyy", { locale: pl }); 
           
           if (!groups[monthKey]) {
@@ -144,7 +147,6 @@ export default function Attendance() {
               <div className="space-y-8">
                   {Object.entries(groupedEvents).map(([month, monthEvents]) => (
                       <div key={month} className="space-y-3">
-                          {/* Nagłówek miesiąca */}
                           <h2 className="text-sm font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider pl-1">
                               {month}
                           </h2>
@@ -169,7 +171,6 @@ export default function Attendance() {
                                           `}
                                       >
                                           <div className="flex items-center gap-4">
-                                              {/* Data Badge */}
                                               <div className={`w-12 h-12 rounded-lg flex flex-col items-center justify-center font-bold ${isTodayEvent ? 'bg-indigo-600 text-white' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300'}`}>
                                                   <span className="text-[10px] uppercase">{format(date, "MMM", {locale: pl})}</span>
                                                   <span className="text-lg leading-none">{format(date, "d")}</span>
@@ -202,7 +203,7 @@ export default function Attendance() {
       );
   }
 
-  // --- WIDOK 2: SPRAWDZANIE (BEZ ZMIAN W LOGICE, TYLKO STYL) ---
+  // --- WIDOK 2: SZCZEGÓŁY OBECNOŚCI ---
   const presentCount = selectedEvent.attendees?.length || 0;
   
   return (
@@ -223,6 +224,7 @@ export default function Attendance() {
               </div>
           </div>
 
+          {/* Akcje dostępne dla Admina ORAZ Instruktora */}
           {canManage && (
             <div className="flex gap-3">
                 <button onClick={() => setShowQR(true)} className="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-bold shadow-lg shadow-indigo-200 dark:shadow-none flex items-center justify-center gap-2 hover:bg-indigo-700 transition">
@@ -240,7 +242,8 @@ export default function Attendance() {
                   
                   return (
                       <div 
-                          key={member.id} 
+                          key={member.uid} 
+                          // Klikalne tylko dla Admina i Instruktora
                           onClick={() => canManage && togglePresence(member.uid!)}
                           className={`p-4 flex items-center justify-between transition select-none
                               ${canManage ? 'cursor-pointer' : 'cursor-default'} 
@@ -249,7 +252,8 @@ export default function Attendance() {
                       >
                           <div className="flex items-center gap-4">
                               <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold transition-transform duration-200 ${isPresent ? 'bg-indigo-600 text-white scale-110' : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-slate-400'}`}>
-                                  {member.firstName[0]}{member.lastName[0]}
+                                  {/* Tu można też dodać avatar jeśli jest dostępny */}
+                                  {member.firstName?.[0]}{member.lastName?.[0]}
                               </div>
                               <div>
                                   <p className={`font-bold transition ${isPresent ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-slate-400'}`}>

@@ -1,5 +1,5 @@
 --- PEŁNY KOD PROJEKTU FOLKBASE ---
-Data: 2025-12-11T18:21:48.731Z
+Data: 2026-01-02T20:12:53.017Z
 
 
 ==================================================
@@ -61,6 +61,7 @@ import AppLayout from "./components/layout/AppLayout";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Repertoire from "./pages/repertoire/Repertoire";
 import Schedule from "./pages/schedule/Schedule";
+import Gallery from "./pages/gallery/Gallery";
 import Costumes from "./pages/costumes/Costumes";
 import Attendance from "./pages/attendance/Attendance";
 import QRScanner from "./pages/scanner/Scanner";
@@ -68,6 +69,8 @@ import Profile from "./pages/profile/Profile";
 import Polls from "./pages/polls/Polls";
 import ConcertPlanner from "./pages/concerts/ConcertPlanner";
 import { ThemeProvider } from "./context/ThemeContext";
+
+
 
 export default function App() {
   return (
@@ -95,6 +98,7 @@ export default function App() {
               <Route path="/profile/:id" element={<Profile />} />
               <Route path="/polls" element={<Polls />} />
               <Route path="/concerts" element={<ConcertPlanner />} />
+              <Route path="/gallery" element={<Gallery />} />
           </Route>
 
           {/* Przekierowanie wszystkich nieznanych tras do dashboardu */}
@@ -156,13 +160,14 @@ import {
   Shirt, 
   CalendarDays, 
   Music2, 
-  LogOut,
-  ClipboardCheck,
-  Sun,
-  Moon,
-  BarChart2,
+  LogOut, 
+  ClipboardCheck, 
+  Sun, 
+  Moon, 
+  BarChart2, 
   Mic2,
-  X // <--- Dodano ikonę X do zamykania
+  X,
+  Image
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
@@ -185,6 +190,7 @@ export default function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
     { path: "/concerts", label: "Planer Koncertów", icon: Mic2 },
     { path: "/repertoire", label: "Repertuar", icon: Music2 },
     { path: "/costumes", label: "Stroje", icon: Shirt },
+    { path: "/gallery", label: "Galeria", icon: Image },
   ];
 
   return (
@@ -226,17 +232,23 @@ export default function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
             </div>
           </div>
 
+          {/* PROFIL UŻYTKOWNIKA - ZDJĘCIE LUB INICJAŁY */}
           <Link 
             to="/profile" 
-            onClick={() => setIsOpen(false)} // Zamknij po kliknięciu w profil
+            onClick={() => setIsOpen(false)}
             className="p-4 border-b border-slate-800 bg-slate-800/50 hover:bg-slate-800 transition cursor-pointer block text-left group"
           >
             <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center text-sm font-bold shadow-md group-hover:scale-105 transition-transform">
-                    {profile?.firstName?.[0]}{profile?.lastName?.[0]}
+                <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center text-sm font-bold shadow-md group-hover:scale-105 transition-transform overflow-hidden border-2 border-slate-700">
+                    {/* Jeśli jest zdjęcie, pokaż je. Jeśli nie - inicjały */}
+                    {profile?.photoUrl ? (
+                        <img src={profile.photoUrl} alt="Avatar" className="w-full h-full object-cover" />
+                    ) : (
+                        <span>{profile?.firstName?.[0]}{profile?.lastName?.[0]}</span>
+                    )}
                 </div>
                 <div>
-                    <p className="text-sm font-medium group-hover:text-indigo-300 transition-colors">
+                    <p className="text-sm font-medium group-hover:text-indigo-300 transition-colors truncate w-32">
                         {profile?.firstName} {profile?.lastName}
                     </p>
                     <p className="text-xs text-slate-400 uppercase tracking-wider">{profile?.role}</p>
@@ -244,7 +256,7 @@ export default function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
             </div>
           </Link>
 
-          <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+          <nav className="flex-1 p-4 space-y-2 overflow-y-auto custom-scrollbar">
             {menuItems.map((item) => (
               <NavLink
                 key={item.path}
@@ -314,7 +326,7 @@ import { User, onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "../services/firebase";
 
-// Definicja typu profilu użytkownika (to co masz w bazie)
+// POPRAWKA: Dodano pole photoUrl, aby Sidebar nie zgłaszał błędu
 interface UserProfile {
   uid: string;
   email: string;
@@ -322,11 +334,12 @@ interface UserProfile {
   lastName: string;
   role: "admin" | "instructor" | "member";
   status: "active" | "pending" | "disabled";
+  photoUrl?: string; // <--- Tego brakowało!
 }
 
 interface AuthContextType {
   user: User | null;         // Obiekt z Firebase Auth
-  profile: UserProfile | null; // Obiekt z Firestore (imie, rola)
+  profile: UserProfile | null; // Obiekt z Firestore (imie, rola, ZDJĘCIE)
   loading: boolean;
   logout: () => Promise<void>;
 }
@@ -477,7 +490,7 @@ import { useAuth } from "../../context/AuthContext";
 import { toDate } from "../../utils/dates";
 import { format, isToday } from "date-fns";
 import { pl } from "date-fns/locale";
-import { ChevronRight, CheckCircle2, Circle, Users, ArrowLeft, QrCode } from "lucide-react";
+import { ChevronRight, CheckCircle2, Circle, Users, ArrowLeft, QrCode, Search } from "lucide-react";
 import QRCode from "react-qr-code";
 
 interface AttendanceEvent {
@@ -486,6 +499,7 @@ interface AttendanceEvent {
     type: string;
     startDate: any;
     attendees?: string[];
+    location?: string;
 }
 
 export default function Attendance() {
@@ -495,11 +509,16 @@ export default function Attendance() {
   const [selectedEvent, setSelectedEvent] = useState<AttendanceEvent | null>(null);
   const [loading, setLoading] = useState(true);
   const [showQR, setShowQR] = useState(false);
+  
+  // Stan Wyszukiwarki
+  const [searchTerm, setSearchTerm] = useState("");
 
+  // ZMIANA: Dodano 'instructor' do uprawnień zarządzania
   const canManage = profile?.role === 'admin' || profile?.role === 'instructor';
 
   useEffect(() => {
-    const q = query(collection(db, "teams", "folkbase", "schedule"), orderBy("startDate", "asc"));
+    // Sortowanie malejąco (najnowsze na górze)
+    const q = query(collection(db, "teams", "folkbase", "schedule"), orderBy("startDate", "desc"));
     const unsub = onSnapshot(q, (snapshot) => {
         const allEvents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AttendanceEvent));
         setEvents(allEvents);
@@ -513,7 +532,9 @@ export default function Attendance() {
         const q = query(collection(db, "teams", "folkbase", "members"), orderBy("lastName"));
         const snap = await getDocs(q);
         const allMembers = snap.docs.map(d => ({id: d.id, ...d.data()} as MemberProfile));
-        const studentsOnly = allMembers.filter(m => m.role !== 'admin' && m.role !== 'instructor');
+        // Filtrujemy, aby na liście obecności byli tylko 'zwykli' członkowie (opcjonalne)
+        // Jeśli chcesz widzieć wszystkich, usuń linię .filter
+        const studentsOnly = allMembers.filter(m => m.role !== 'admin'); 
         setMembers(studentsOnly);
     };
     fetchMembers();
@@ -531,6 +552,7 @@ export default function Attendance() {
           newAttendees = [...currentAttendees, memberId];
       }
 
+      // Aktualizacja lokalna (optymistyczna)
       setSelectedEvent({ ...selectedEvent, attendees: newAttendees });
 
       try {
@@ -547,16 +569,43 @@ export default function Attendance() {
       if (!selectedEvent || !canManage) return;
       const allIds = members.map(m => m.uid!);
       const allPresent = allIds.every(id => selectedEvent.attendees?.includes(id));
+      
+      // Jeśli wszyscy są obecni -> odznacz wszystkich. W przeciwnym razie -> zaznacz wszystkich.
       const newAttendees = allPresent ? [] : allIds;
 
       setSelectedEvent({ ...selectedEvent, attendees: newAttendees });
       await updateDoc(doc(db, "teams", "folkbase", "schedule", selectedEvent.id), { attendees: newAttendees });
   }
 
+  const getEventColorBorder = (type: string) => {
+      switch (type) {
+          case 'rehearsal': return 'border-l-blue-500';
+          case 'concert': return 'border-l-purple-500';
+          case 'workshop': return 'border-l-orange-500';
+          default: return 'border-l-gray-300';
+      }
+  };
+
   if (loading) return <div className="p-8 text-gray-500 dark:text-slate-400">Ładowanie dziennika...</div>;
 
-  // --- WIDOK 1: LISTA WYDARZEŃ ---
+  // --- WIDOK 1: LISTA WYDARZEŃ (Z GRUPOWANIEM I WYSZUKIWARKĄ) ---
   if (!selectedEvent) {
+      const filteredEvents = events.filter(e => 
+          e.title.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+
+      // Grupowanie po miesiącach
+      const groupedEvents = filteredEvents.reduce((groups, event) => {
+          const date = toDate(event.startDate);
+          const monthKey = format(date, "LLLL yyyy", { locale: pl }); 
+          
+          if (!groups[monthKey]) {
+              groups[monthKey] = [];
+          }
+          groups[monthKey].push(event);
+          return groups;
+      }, {} as Record<string, AttendanceEvent[]>);
+
       return (
           <div className="space-y-6">
               <div>
@@ -564,61 +613,92 @@ export default function Attendance() {
                   <p className="text-gray-500 dark:text-slate-400">Wybierz wydarzenie, aby sprawdzić listę.</p>
               </div>
 
-              <div className="grid gap-4">
-                  {events.map(event => {
-                      const date = toDate(event.startDate);
-                      const isTodayEvent = isToday(date);
-                      const presentCount = event.attendees?.length || 0;
+              {/* WYSZUKIWARKA */}
+              <div className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700">
+                  <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                      <input
+                          type="text"
+                          placeholder="Szukaj wydarzenia..."
+                          className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white transition-all"
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                      />
+                  </div>
+              </div>
 
-                      return (
-                          <div 
-                              key={event.id}
-                              onClick={() => setSelectedEvent(event)}
-                              className={`
-                                p-4 rounded-xl border flex items-center justify-between cursor-pointer transition hover:shadow-md hover:-translate-y-0.5
-                                ${isTodayEvent 
-                                    ? 'bg-white dark:bg-slate-800 border-indigo-500 ring-1 ring-indigo-500 shadow-indigo-100 dark:shadow-none' 
-                                    : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700'}
-                              `}
-                          >
-                              <div className="flex items-center gap-4">
-                                  <div className={`w-12 h-12 rounded-lg flex flex-col items-center justify-center font-bold ${isTodayEvent ? 'bg-indigo-600 text-white' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300'}`}>
-                                      <span className="text-[10px] uppercase">{format(date, "MMM", {locale: pl})}</span>
-                                      <span className="text-lg leading-none">{format(date, "d")}</span>
-                                  </div>
-                                  <div>
-                                      <h3 className="font-bold text-gray-800 dark:text-white">{event.title}</h3>
-                                      <p className="text-sm text-gray-500 dark:text-slate-400">{format(date, "EEEE, HH:mm", {locale: pl})}</p>
-                                  </div>
-                              </div>
-                              
-                              <div className="text-right">
-                                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600">
-                                      <Users size={14} className="text-gray-400 dark:text-slate-400" />
-                                      <span className="text-sm font-medium text-gray-700 dark:text-slate-200">{presentCount}</span>
-                                  </div>
-                                  <ChevronRight size={20} className="text-gray-300 dark:text-slate-600 inline-block ml-2" />
-                              </div>
+              {/* LISTA Z GRUPOWANIEM */}
+              <div className="space-y-8">
+                  {Object.entries(groupedEvents).map(([month, monthEvents]) => (
+                      <div key={month} className="space-y-3">
+                          <h2 className="text-sm font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider pl-1">
+                              {month}
+                          </h2>
+
+                          <div className="grid gap-3">
+                              {monthEvents.map(event => {
+                                  const date = toDate(event.startDate);
+                                  const isTodayEvent = isToday(date);
+                                  const presentCount = event.attendees?.length || 0;
+                                  const borderColor = getEventColorBorder(event.type);
+
+                                  return (
+                                      <div 
+                                          key={event.id}
+                                          onClick={() => setSelectedEvent(event)}
+                                          className={`
+                                              p-4 rounded-xl border flex items-center justify-between cursor-pointer transition hover:shadow-md hover:-translate-y-0.5
+                                              border-l-4 ${borderColor}
+                                              ${isTodayEvent 
+                                                  ? 'bg-white dark:bg-slate-800 border-t-indigo-500 border-r-indigo-500 border-b-indigo-500 ring-1 ring-indigo-500 shadow-indigo-100 dark:shadow-none' 
+                                                  : 'bg-white dark:bg-slate-800 border-t-gray-200 border-r-gray-200 border-b-gray-200 dark:border-t-slate-700 dark:border-r-slate-700 dark:border-b-slate-700'}
+                                          `}
+                                      >
+                                          <div className="flex items-center gap-4">
+                                              <div className={`w-12 h-12 rounded-lg flex flex-col items-center justify-center font-bold ${isTodayEvent ? 'bg-indigo-600 text-white' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300'}`}>
+                                                  <span className="text-[10px] uppercase">{format(date, "MMM", {locale: pl})}</span>
+                                                  <span className="text-lg leading-none">{format(date, "d")}</span>
+                                              </div>
+                                              <div>
+                                                  <h3 className="font-bold text-gray-800 dark:text-white">{event.title}</h3>
+                                                  <p className="text-sm text-gray-500 dark:text-slate-400 capitalize">{format(date, "EEEE, HH:mm", {locale: pl})}</p>
+                                              </div>
+                                          </div>
+                                          
+                                          <div className="text-right">
+                                              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600">
+                                                  <Users size={14} className="text-gray-400 dark:text-slate-400" />
+                                                  <span className="text-sm font-medium text-gray-700 dark:text-slate-200">{presentCount}</span>
+                                              </div>
+                                              <ChevronRight size={20} className="text-gray-300 dark:text-slate-600 inline-block ml-2" />
+                                          </div>
+                                      </div>
+                                  )
+                              })}
                           </div>
-                      )
-                  })}
+                      </div>
+                  ))}
+
+                  {filteredEvents.length === 0 && (
+                      <div className="text-center py-8 text-gray-500">Brak wydarzeń.</div>
+                  )}
               </div>
           </div>
       );
   }
 
-  // --- WIDOK 2: SPRAWDZANIE ---
+  // --- WIDOK 2: SZCZEGÓŁY OBECNOŚCI ---
   const presentCount = selectedEvent.attendees?.length || 0;
   
   return (
-      <div className="space-y-6 max-w-2xl mx-auto">
+      <div className="space-y-6 max-w-2xl mx-auto animate-in fade-in slide-in-from-right-4 duration-300">
           <div className="flex items-center gap-4 mb-6">
               <button onClick={() => setSelectedEvent(null)} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full transition">
                   <ArrowLeft size={24} className="text-gray-600 dark:text-slate-300" />
               </button>
               <div className="flex-1">
                    <h2 className="text-xl font-bold text-gray-800 dark:text-white">{selectedEvent.title}</h2>
-                   <p className="text-gray-500 dark:text-slate-400 text-sm">
+                   <p className="text-gray-500 dark:text-slate-400 text-sm capitalize">
                        {format(toDate(selectedEvent.startDate), "d MMMM, HH:mm", {locale: pl})}
                    </p>
               </div>
@@ -628,10 +708,11 @@ export default function Attendance() {
               </div>
           </div>
 
+          {/* Akcje dostępne dla Admina ORAZ Instruktora */}
           {canManage && (
             <div className="flex gap-3">
                 <button onClick={() => setShowQR(true)} className="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-bold shadow-lg shadow-indigo-200 dark:shadow-none flex items-center justify-center gap-2 hover:bg-indigo-700 transition">
-                    <QrCode size={20} /> WYŚWIETL KOD QR
+                    <QrCode size={20} /> KOD QR
                 </button>
                 <button onClick={handleSelectAll} className="px-6 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 text-gray-600 dark:text-slate-300 py-3 rounded-xl font-medium hover:bg-gray-50 dark:hover:bg-slate-700 transition">
                     Zaznacz wszystkich
@@ -645,7 +726,8 @@ export default function Attendance() {
                   
                   return (
                       <div 
-                          key={member.id} 
+                          key={member.uid} 
+                          // Klikalne tylko dla Admina i Instruktora
                           onClick={() => canManage && togglePresence(member.uid!)}
                           className={`p-4 flex items-center justify-between transition select-none
                               ${canManage ? 'cursor-pointer' : 'cursor-default'} 
@@ -654,7 +736,8 @@ export default function Attendance() {
                       >
                           <div className="flex items-center gap-4">
                               <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold transition-transform duration-200 ${isPresent ? 'bg-indigo-600 text-white scale-110' : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-slate-400'}`}>
-                                  {member.firstName[0]}{member.lastName[0]}
+                                  {/* Tu można też dodać avatar jeśli jest dostępny */}
+                                  {member.firstName?.[0]}{member.lastName?.[0]}
                               </div>
                               <div>
                                   <p className={`font-bold transition ${isPresent ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-slate-400'}`}>
@@ -701,83 +784,229 @@ FILE: src\pages\auth\Login.tsx
 ==================================================
 import React, { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-// ZMIANA: Przywracamy bezpośredni import z Firebase
-import { signInWithEmailAndPassword } from "firebase/auth";
+import { signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
 import { auth } from "../../services/firebase";
+import { Eye, EyeOff, Loader2, ArrowLeft, Mail, Lock } from "lucide-react"; // Nowe ikony
 
 export default function Login() {
+  // Stan formularza
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false); // Dodano stan ładowania
+  
+  // Stan UI
+  const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false); // Do ikony "Oka"
+  const [errorMsg, setErrorMsg] = useState<string | null>(null); // Do wyświetlania błędów
+  const [successMsg, setSuccessMsg] = useState<string | null>(null); // Do komunikatu o resetowaniu
+  const [view, setView] = useState<'login' | 'reset'>('login'); // Przełącznik widoków
+
   const navigate = useNavigate();
   const location = useLocation();
   const from = location.state?.from?.pathname || "/dashboard";
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // Tłumacz błędów Firebase na polski
+  const getFriendlyErrorMessage = (errorCode: string) => {
+      switch (errorCode) {
+          case 'auth/invalid-credential':
+              return "Błędny email lub hasło.";
+          case 'auth/user-not-found':
+              return "Nie znaleziono konta o tym adresie.";
+          case 'auth/wrong-password':
+              return "Błędne hasło.";
+          case 'auth/too-many-requests':
+              return "Za dużo nieudanych prób. Spróbuj później.";
+          case 'auth/invalid-email':
+              return "Niepoprawny format adresu email.";
+          default:
+              return "Wystąpił błąd logowania. Spróbuj ponownie.";
+      }
+  };
+
+  // Obsługa Logowania
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setErrorMsg(null);
+    
     try {
-      // ZMIANA: Używamy funkcji z SDK Firebase, a nie z contextu
       await signInWithEmailAndPassword(auth, email, password);
       navigate(from, { replace: true });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Błąd logowania:", error);
-      alert("Nie udało się zalogować. Sprawdź dane.");
+      setErrorMsg(getFriendlyErrorMessage(error.code));
     } finally {
       setLoading(false);
     }
   };
 
+  // Obsługa Resetowania Hasła
+  const handleResetPassword = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!email) {
+          setErrorMsg("Wpisz adres email.");
+          return;
+      }
+      setLoading(true);
+      setErrorMsg(null);
+      setSuccessMsg(null);
+
+      try {
+          await sendPasswordResetEmail(auth, email);
+          setSuccessMsg("Link do resetowania hasła został wysłany na Twój email!");
+          // Opcjonalnie: wyczyść email po sukcesie
+          // setEmail(""); 
+      } catch (error: any) {
+          console.error("Błąd resetowania:", error);
+          setErrorMsg(getFriendlyErrorMessage(error.code));
+      } finally {
+          setLoading(false);
+      }
+  };
+
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-slate-900 transition-colors font-sans">
-      <div className="px-8 py-8 text-left bg-white dark:bg-slate-800 shadow-xl rounded-2xl border border-gray-200 dark:border-slate-700 w-full max-w-md transition-colors">
-        <h3 className="text-2xl font-bold text-center text-gray-800 dark:text-white mb-6">Zaloguj się do FolkBase</h3>
-        <form onSubmit={handleSubmit}>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-2" htmlFor="email">Email</label>
-              <input
-                type="email"
-                placeholder="wpisz@email.com"
-                className="w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:border-transparent
-                           bg-gray-50 dark:bg-slate-900
-                           text-gray-900 dark:text-white
-                           border-gray-200 dark:border-slate-600
-                           placeholder-gray-400 dark:placeholder-slate-500 transition-all"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
+    <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-slate-900 transition-colors font-sans p-4">
+      <div className="px-8 py-10 text-left bg-white dark:bg-slate-800 shadow-2xl rounded-2xl border border-gray-200 dark:border-slate-700 w-full max-w-md transition-colors relative overflow-hidden">
+        
+        {/* Dekoracyjny gradient na górze */}
+        <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-indigo-500 to-purple-600"></div>
+
+        <div className="mb-8 text-center">
+            <h1 className="text-3xl font-extrabold text-gray-800 dark:text-white mb-2">FolkBase</h1>
+            <p className="text-gray-500 dark:text-slate-400 text-sm">Zarządzanie Zespołem Ludowym</p>
+        </div>
+
+        {/* --- KOMUNIKATY BŁĘDÓW / SUKCESÓW --- */}
+        {errorMsg && (
+            <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-300 text-sm rounded-lg text-center font-medium animate-in fade-in slide-in-from-top-2">
+                {errorMsg}
             </div>
-            <div>
-              <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-2" htmlFor="password">Hasło</label>
-              <input
-                type="password"
-                placeholder="••••••••"
-                className="w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:border-transparent
-                           bg-gray-50 dark:bg-slate-900
-                           text-gray-900 dark:text-white
-                           border-gray-200 dark:border-slate-600
-                           placeholder-gray-400 dark:placeholder-slate-500 transition-all"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
+        )}
+        {successMsg && (
+            <div className="mb-4 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-600 dark:text-green-300 text-sm rounded-lg text-center font-medium animate-in fade-in slide-in-from-top-2">
+                {successMsg}
             </div>
-            <div>
+        )}
+
+        {/* --- WIDOK LOGOWANIA --- */}
+        {view === 'login' ? (
+            <form onSubmit={handleLogin} className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
+              <h3 className="text-xl font-bold text-gray-800 dark:text-white text-center">Zaloguj się</h3>
+              
+              <div>
+                <label className="block text-xs font-bold text-gray-500 dark:text-slate-400 uppercase mb-1.5 tracking-wider">Email</label>
+                <div className="relative">
+                    <Mail className="absolute left-3 top-3.5 text-gray-400" size={18} />
+                    <input
+                        type="email"
+                        placeholder="wpisz@email.com"
+                        className="w-full pl-10 pr-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:border-transparent
+                                bg-gray-50 dark:bg-slate-900
+                                text-gray-900 dark:text-white
+                                border-gray-200 dark:border-slate-600
+                                placeholder-gray-400 dark:placeholder-slate-500 transition-all"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        required
+                    />
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-xs font-bold text-gray-500 dark:text-slate-400 uppercase mb-1.5 tracking-wider">Hasło</label>
+                <div className="relative">
+                    <Lock className="absolute left-3 top-3.5 text-gray-400" size={18} />
+                    <input
+                        type={showPassword ? "text" : "password"}
+                        placeholder="••••••••"
+                        className="w-full pl-10 pr-12 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:border-transparent
+                                bg-gray-50 dark:bg-slate-900
+                                text-gray-900 dark:text-white
+                                border-gray-200 dark:border-slate-600
+                                placeholder-gray-400 dark:placeholder-slate-500 transition-all"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                    />
+                    <button 
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-3.5 text-gray-400 hover:text-indigo-600 transition"
+                        tabIndex={-1} // Żeby nie przeskakiwać tabulatorem na oko
+                    >
+                        {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                    </button>
+                </div>
+                <div className="text-right mt-1">
+                    <button 
+                        type="button" 
+                        onClick={() => { setView('reset'); setErrorMsg(null); setSuccessMsg(null); }}
+                        className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-medium"
+                    >
+                        Nie pamiętasz hasła?
+                    </button>
+                </div>
+              </div>
+
               <button 
                 type="submit"
                 disabled={loading}
-                className="w-full px-4 py-3 mt-4 font-bold text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 transition-colors shadow-md hover:shadow-lg disabled:opacity-70"
+                className="w-full py-3 font-bold text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 disabled:opacity-70 disabled:hover:translate-y-0 flex items-center justify-center gap-2"
               >
-                  {loading ? "Logowanie..." : "Zaloguj się"}
+                  {loading ? <Loader2 className="animate-spin" size={20} /> : "Zaloguj się"}
               </button>
-            </div>
-          </div>
-        </form>
-          <p className="mt-6 text-xs text-center text-gray-500 dark:text-slate-400">
-              Nie masz konta? Skontaktuj się z administratorem zespołu.
-          </p>
+            </form>
+        ) : (
+            /* --- WIDOK RESETOWANIA HASŁA --- */
+            <form onSubmit={handleResetPassword} className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
+                <div className="flex items-center mb-4">
+                    <button 
+                        type="button" 
+                        onClick={() => { setView('login'); setErrorMsg(null); setSuccessMsg(null); }}
+                        className="p-1 -ml-2 text-gray-400 hover:text-indigo-600 transition rounded-full hover:bg-gray-100 dark:hover:bg-slate-700"
+                    >
+                        <ArrowLeft size={24} />
+                    </button>
+                    <h3 className="text-xl font-bold text-gray-800 dark:text-white ml-2">Reset hasła</h3>
+                </div>
+
+                <p className="text-sm text-gray-500 dark:text-slate-400">
+                    Podaj adres email powiązany z Twoim kontem. Wyślemy Ci link do ustawienia nowego hasła.
+                </p>
+                
+                <div>
+                    <label className="block text-xs font-bold text-gray-500 dark:text-slate-400 uppercase mb-1.5 tracking-wider">Email</label>
+                    <div className="relative">
+                        <Mail className="absolute left-3 top-3.5 text-gray-400" size={18} />
+                        <input
+                            type="email"
+                            placeholder="wpisz@email.com"
+                            className="w-full pl-10 pr-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:border-transparent
+                                    bg-gray-50 dark:bg-slate-900
+                                    text-gray-900 dark:text-white
+                                    border-gray-200 dark:border-slate-600
+                                    placeholder-gray-400 dark:placeholder-slate-500 transition-all"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            required
+                        />
+                    </div>
+                </div>
+
+                <button 
+                    type="submit"
+                    disabled={loading}
+                    className="w-full py-3 font-bold text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 transition-all shadow-md hover:shadow-lg disabled:opacity-70 flex items-center justify-center gap-2"
+                >
+                    {loading ? <Loader2 className="animate-spin" size={20} /> : "Wyślij link resetujący"}
+                </button>
+            </form>
+        )}
+
+        <div className="mt-8 pt-6 border-t border-gray-100 dark:border-slate-700 text-center">
+             <p className="text-xs text-gray-400 dark:text-slate-500">
+                 Nie masz konta? Skontaktuj się z administratorem zespołu.
+             </p>
+        </div>
       </div>
     </div>
   );
@@ -1113,12 +1342,14 @@ export default function ConcertPlanner() {
 ==================================================
 FILE: src\pages\costumes\Costumes.tsx
 ==================================================
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, orderBy, serverTimestamp } from "firebase/firestore";
 import { db } from "../../services/firebase";
+import { uploadCostumeImage } from "../../services/mediaService";
 import { Costume } from "../../types";
 import { useAuth } from "../../context/AuthContext";
-import { Plus, Shirt, Trash2, Pencil, Package } from "lucide-react";
+// USUNIĘTO 'Image as ImageIcon', aby naprawić błąd "defined but never used"
+import { Plus, Shirt, Trash2, Pencil, Package, ExternalLink, UploadCloud, X, Loader2 } from "lucide-react";
 
 export default function Costumes() {
   const { profile } = useAuth();
@@ -1153,12 +1384,6 @@ export default function Costumes() {
   const openAddModal = () => { setEditingItem(null); setIsModalOpen(true); };
   const openEditModal = (item: Costume) => { setEditingItem(item); setIsModalOpen(true); };
 
-  const GenderBadge = ({ gender }: { gender: string }) => {
-      if (gender === 'female') return <span className="text-[10px] uppercase font-bold text-pink-600 bg-pink-100 dark:bg-pink-900/30 dark:text-pink-300 px-2 py-1 rounded-full">Damski</span>;
-      if (gender === 'male') return <span className="text-[10px] uppercase font-bold text-blue-600 bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300 px-2 py-1 rounded-full">Męski</span>;
-      return <span className="text-[10px] uppercase font-bold text-gray-600 bg-gray-100 dark:bg-slate-700 dark:text-slate-300 px-2 py-1 rounded-full">Unisex</span>;
-  };
-
   if (loading) return <div className="p-8 text-gray-500 dark:text-slate-400">Ładowanie magazynu...</div>;
 
   return (
@@ -1183,47 +1408,21 @@ export default function Costumes() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {filteredCostumes.map((item) => (
-            <div key={item.id} className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden hover:shadow-md transition group relative">
-                
-                <div className="h-48 bg-gray-100 dark:bg-slate-900 relative overflow-hidden flex items-center justify-center">
-                    {item.imageUrl ? (
-                        <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
-                    ) : (
-                        <Shirt size={48} className="text-gray-300 dark:text-slate-600" />
-                    )}
-                    <div className="absolute top-2 right-2">
-                        <GenderBadge gender={item.gender} />
-                    </div>
-                </div>
-
-                <div className="p-4">
-                    <h3 className="font-bold text-gray-800 dark:text-white mb-1">{item.name}</h3>
-                    <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-slate-400 mb-4">
-                        <span className="bg-gray-100 dark:bg-slate-700 px-2 py-0.5 rounded text-xs font-mono">Rozm: {item.sizeRange}</span>
-                    </div>
-
-                    <div className="flex justify-between items-center pt-3 border-t border-gray-100 dark:border-slate-700">
-                        <div className="flex items-center gap-2 text-gray-700 dark:text-slate-300 font-medium">
-                            <Package size={18} className="text-indigo-500" />
-                            <span>{item.quantity} szt.</span>
-                        </div>
-                        
-                        {canManage && (
-                            <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition">
-                                <button onClick={() => openEditModal(item)} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded"><Pencil size={16}/></button>
-                                <button onClick={() => item.id && handleDelete(item.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded"><Trash2 size={16}/></button>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </div>
+            <CostumeCard 
+                key={item.id} 
+                item={item} 
+                canManage={canManage} 
+                onEdit={() => openEditModal(item)} 
+                onDelete={() => item.id && handleDelete(item.id)} 
+            />
         ))}
       </div>
 
       {costumes.length === 0 && (
-          <div className="text-center py-12 text-gray-500 dark:text-slate-400 bg-gray-50 dark:bg-slate-800/50 rounded-xl border border-dashed border-gray-300 dark:border-slate-700">
-              <Shirt size={48} className="mx-auto mb-3 opacity-20" />
-              <p>Magazyn jest pusty.</p>
+          <div className="text-center py-16 text-gray-500 dark:text-slate-400 bg-gray-50 dark:bg-slate-800/50 rounded-2xl border-2 border-dashed border-gray-200 dark:border-slate-700">
+              <Shirt size={48} className="mx-auto mb-4 opacity-20" />
+              <p className="font-medium">Magazyn jest pusty.</p>
+              {canManage && <p className="text-sm mt-1">Dodaj pierwszy strój przyciskiem powyżej.</p>}
           </div>
       )}
 
@@ -1232,10 +1431,85 @@ export default function Costumes() {
   );
 }
 
+function CostumeCard({ item, canManage, onEdit, onDelete }: { item: Costume, canManage: boolean, onEdit: () => void, onDelete: () => void }) {
+    const GenderBadge = ({ gender }: { gender: string }) => {
+        if (gender === 'female') return <span className="text-[10px] uppercase font-bold text-pink-600 bg-pink-100 dark:bg-pink-900/30 dark:text-pink-300 px-2 py-1 rounded-full shadow-sm">Damski</span>;
+        if (gender === 'male') return <span className="text-[10px] uppercase font-bold text-blue-600 bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300 px-2 py-1 rounded-full shadow-sm">Męski</span>;
+        return <span className="text-[10px] uppercase font-bold text-gray-600 bg-gray-100 dark:bg-slate-700 dark:text-slate-300 px-2 py-1 rounded-full shadow-sm">Unisex</span>;
+    };
+
+    return (
+        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden hover:shadow-md transition group relative flex flex-col h-full">
+            
+            <div className="h-56 bg-gray-100 dark:bg-slate-900 relative overflow-hidden flex items-center justify-center group/image">
+                {item.imageUrl ? (
+                    <>
+                        <img 
+                            src={item.imageUrl} 
+                            alt={item.name} 
+                            className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
+                        />
+                        <a 
+                            href={item.imageUrl} 
+                            target="_blank" 
+                            rel="noreferrer"
+                            className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover/image:opacity-100 transition duration-300 cursor-pointer backdrop-blur-[2px]"
+                        >
+                            <div className="bg-white/20 text-white px-4 py-2 rounded-full backdrop-blur-md border border-white/30 flex items-center gap-2 text-sm font-bold hover:bg-white/30 transition">
+                                <ExternalLink size={16} /> Zobacz
+                            </div>
+                        </a>
+                    </>
+                ) : (
+                    <div className="flex flex-col items-center justify-center text-gray-300 dark:text-slate-600 p-4 text-center">
+                        <Shirt size={48} strokeWidth={1.5} />
+                        <span className="text-[10px] mt-2 font-medium uppercase tracking-widest opacity-60">Brak zdjęcia</span>
+                    </div>
+                )}
+                <div className="absolute top-3 right-3 z-10 pointer-events-none">
+                    <GenderBadge gender={item.gender} />
+                </div>
+            </div>
+
+            <div className="p-4 flex flex-col flex-1">
+                <div className="flex-1">
+                    <h3 className="font-bold text-gray-800 dark:text-white mb-1 truncate" title={item.name}>{item.name}</h3>
+                    <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-slate-400 mb-4">
+                        <span className="bg-gray-100 dark:bg-slate-700 px-2 py-0.5 rounded text-xs font-mono border border-gray-200 dark:border-slate-600">
+                            Rozm: {item.sizeRange}
+                        </span>
+                        <span className="text-xs opacity-60">{item.type === 'set' ? 'Komplet' : item.type === 'element' ? 'Element' : 'Dodatek'}</span>
+                    </div>
+                </div>
+
+                <div className="flex justify-between items-center pt-3 border-t border-gray-100 dark:border-slate-700 mt-auto">
+                    <div className="flex items-center gap-2 text-gray-700 dark:text-slate-300 font-bold bg-indigo-50 dark:bg-indigo-900/20 px-3 py-1.5 rounded-lg">
+                        <Package size={18} className="text-indigo-500" />
+                        <span>{item.quantity} szt.</span>
+                    </div>
+                    
+                    {canManage && (
+                        <div className="flex gap-1">
+                            <button onClick={onEdit} className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-lg transition" title="Edytuj">
+                                <Pencil size={18}/>
+                            </button>
+                            <button onClick={onDelete} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition" title="Usuń">
+                                <Trash2 size={18}/>
+                            </button>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
+
 function CostumeModal({ onClose, initialData }: { onClose: () => void, initialData: Costume | null }) {
     const [formData, setFormData] = useState({
         name: '', type: 'set', gender: 'female', sizeRange: '', quantity: 1, imageUrl: '', description: ''
     });
+    const [uploading, setUploading] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         if(initialData) {
@@ -1251,6 +1525,22 @@ function CostumeModal({ onClose, initialData }: { onClose: () => void, initialDa
         }
     }, [initialData]);
 
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setUploading(true);
+        try {
+            const url = await uploadCostumeImage(file);
+            setFormData(prev => ({ ...prev, imageUrl: url }));
+        } catch (error) {
+            console.error("Upload error:", error);
+            alert("Błąd podczas wysyłania zdjęcia.");
+        } finally {
+            setUploading(false);
+        }
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
@@ -1263,28 +1553,83 @@ function CostumeModal({ onClose, initialData }: { onClose: () => void, initialDa
         } catch (err) { console.error(err); alert("Błąd zapisu"); }
     };
 
+    const handleRemoveImage = () => {
+        setFormData(prev => ({ ...prev, imageUrl: '' }));
+        if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg p-6 border border-gray-100 dark:border-slate-700">
-                <h2 className="text-xl font-bold mb-4 text-gray-800 dark:text-white">{initialData ? "Edytuj strój" : "Dodaj nowy strój"}</h2>
-                <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
+            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg p-6 border border-gray-100 dark:border-slate-700 my-8">
+                <h2 className="text-xl font-bold mb-6 text-gray-800 dark:text-white flex items-center gap-2">
+                    {initialData ? <Pencil size={20}/> : <Plus size={20}/>}
+                    {initialData ? "Edytuj strój" : "Dodaj nowy strój"}
+                </h2>
+                
+                <form onSubmit={handleSubmit} className="space-y-5">
+                    
+                    {/* SEKCJA WGRYWANIA ZDJĘCIA */}
+                    <div className="flex flex-col items-center justify-center mb-4">
+                        {/* NAPRAWA: Usunięto warunkowe 'hidden' i 'flex', teraz struktura jest czystsza */}
+                        <div className="relative w-full h-48 bg-gray-50 dark:bg-slate-900 rounded-xl border-2 border-dashed border-gray-300 dark:border-slate-600 flex flex-col items-center justify-center overflow-hidden hover:border-indigo-400 dark:hover:border-indigo-500 transition-colors">
+                            
+                            {uploading ? (
+                                <div className="flex flex-col items-center text-indigo-600 dark:text-indigo-400">
+                                    <Loader2 size={32} className="animate-spin mb-2" />
+                                    <span className="text-xs font-bold">Wgrywanie...</span>
+                                </div>
+                            ) : formData.imageUrl ? (
+                                <>
+                                    <img src={formData.imageUrl} alt="Podgląd" className="w-full h-full object-contain" />
+                                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 hover:opacity-100 transition duration-200">
+                                        <button 
+                                            type="button" 
+                                            onClick={handleRemoveImage}
+                                            className="bg-red-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-red-700 flex items-center gap-1 shadow-lg"
+                                        >
+                                            <X size={14} /> Usuń zdjęcie
+                                        </button>
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="text-center p-6 cursor-pointer w-full h-full flex flex-col items-center justify-center" onClick={() => fileInputRef.current?.click()}>
+                                    <UploadCloud size={32} className="mx-auto text-gray-400 mb-2 hover:text-indigo-500 transition-colors" />
+                                    <p className="text-sm font-medium text-gray-600 dark:text-slate-300">Kliknij, aby wgrać zdjęcie</p>
+                                    <p className="text-[10px] text-gray-400 mt-1">PNG, JPG</p>
+                                </div>
+                            )}
+                            
+                            <input 
+                                type="file" 
+                                ref={fileInputRef}
+                                className="hidden" 
+                                accept="image/*"
+                                onChange={handleFileChange}
+                                disabled={uploading}
+                            />
+                        </div>
+                    </div>
+
                     <div>
-                        <label className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase">Nazwa</label>
-                        <input required className="w-full border dark:border-slate-600 bg-white dark:bg-slate-900 text-gray-800 dark:text-white rounded p-2 outline-none focus:ring-2 focus:ring-indigo-500" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                        <label className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase mb-1 block">Nazwa stroju</label>
+                        <input required className="w-full border dark:border-slate-600 bg-white dark:bg-slate-900 text-gray-800 dark:text-white rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-indigo-500 transition" 
+                            value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} 
+                            placeholder="np. Gorset krakowski"
+                        />
                     </div>
                     
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase">Płeć</label>
-                            <select className="w-full border dark:border-slate-600 bg-white dark:bg-slate-900 text-gray-800 dark:text-white rounded p-2 outline-none focus:ring-2 focus:ring-indigo-500" value={formData.gender} onChange={e => setFormData({...formData, gender: e.target.value})}>
+                            <label className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase mb-1 block">Płeć</label>
+                            <select className="w-full border dark:border-slate-600 bg-white dark:bg-slate-900 text-gray-800 dark:text-white rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-indigo-500 transition" value={formData.gender} onChange={e => setFormData({...formData, gender: e.target.value})}>
                                 <option value="female">Damski</option>
                                 <option value="male">Męski</option>
                                 <option value="unisex">Unisex</option>
                             </select>
                         </div>
                         <div>
-                            <label className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase">Typ</label>
-                            <select className="w-full border dark:border-slate-600 bg-white dark:bg-slate-900 text-gray-800 dark:text-white rounded p-2 outline-none focus:ring-2 focus:ring-indigo-500" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})}>
+                            <label className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase mb-1 block">Typ</label>
+                            <select className="w-full border dark:border-slate-600 bg-white dark:bg-slate-900 text-gray-800 dark:text-white rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-indigo-500 transition" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})}>
                                 <option value="set">Cały Komplet</option>
                                 <option value="element">Pojedynczy Element</option>
                                 <option value="accessory">Dodatek / Rekwizyt</option>
@@ -1294,23 +1639,20 @@ function CostumeModal({ onClose, initialData }: { onClose: () => void, initialDa
 
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase">Rozmiarówka</label>
-                            <input required className="w-full border dark:border-slate-600 bg-white dark:bg-slate-900 text-gray-800 dark:text-white rounded p-2 outline-none focus:ring-2 focus:ring-indigo-500" value={formData.sizeRange} onChange={e => setFormData({...formData, sizeRange: e.target.value})} />
+                            <label className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase mb-1 block">Rozmiarówka</label>
+                            <input required className="w-full border dark:border-slate-600 bg-white dark:bg-slate-900 text-gray-800 dark:text-white rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-indigo-500 transition" value={formData.sizeRange} onChange={e => setFormData({...formData, sizeRange: e.target.value})} placeholder="np. 36-42 lub S-L"/>
                         </div>
                         <div>
-                            <label className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase">Ilość</label>
-                            <input type="number" required className="w-full border dark:border-slate-600 bg-white dark:bg-slate-900 text-gray-800 dark:text-white rounded p-2 outline-none focus:ring-2 focus:ring-indigo-500" value={formData.quantity} onChange={e => setFormData({...formData, quantity: Number(e.target.value)})} />
+                            <label className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase mb-1 block">Ilość</label>
+                            <input type="number" required className="w-full border dark:border-slate-600 bg-white dark:bg-slate-900 text-gray-800 dark:text-white rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-indigo-500 transition" value={formData.quantity} onChange={e => setFormData({...formData, quantity: Number(e.target.value)})} />
                         </div>
                     </div>
 
-                    <div>
-                        <label className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase">Link do zdjęcia</label>
-                        <input className="w-full border dark:border-slate-600 bg-white dark:bg-slate-900 text-gray-800 dark:text-white rounded p-2 outline-none focus:ring-2 focus:ring-indigo-500" value={formData.imageUrl} onChange={e => setFormData({...formData, imageUrl: e.target.value})} />
-                    </div>
-
-                    <div className="flex justify-end gap-2 pt-4">
-                        <button type="button" onClick={onClose} className="px-4 py-2 text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded transition">Anuluj</button>
-                        <button type="submit" className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition">Zapisz</button>
+                    <div className="flex justify-end gap-3 pt-4 border-t border-gray-100 dark:border-slate-700">
+                        <button type="button" onClick={onClose} className="px-5 py-2.5 text-sm font-medium text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition">Anuluj</button>
+                        <button type="submit" disabled={uploading} className="px-5 py-2.5 text-sm font-bold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 shadow-md shadow-indigo-200 dark:shadow-none transition disabled:opacity-50 disabled:cursor-not-allowed">
+                            {uploading ? "Wgrywanie..." : "Zapisz"}
+                        </button>
                     </div>
                 </form>
             </div>
@@ -1657,362 +1999,507 @@ function StatCard({ icon, label, value, color, bg, border, onClick }: any) {
 }
 
 ==================================================
+FILE: src\pages\gallery\Gallery.tsx
+==================================================
+import React, { useEffect, useState, useRef } from "react";
+import { collection, onSnapshot, addDoc, query, orderBy, deleteDoc, doc, serverTimestamp } from "firebase/firestore";
+import { db } from "../../services/firebase";
+import { uploadCostumeImage } from "../../services/mediaService"; 
+import { useAuth } from "../../context/AuthContext";
+import { Plus, Trash2, FolderPlus, Folder, ArrowLeft, X, Loader2 } from "lucide-react";
+// POPRAWKA: Importujemy toast zamiast używać alert()
+import toast from "react-hot-toast";
+
+// Typy danych
+interface Album {
+    id: string;
+    title: string;
+    createdAt: any;
+    createdBy: string;
+}
+
+interface Photo {
+    id: string;
+    url: string;
+    createdAt: any;
+}
+
+export default function Gallery() {
+    const { profile, user } = useAuth();
+    const canManage = profile?.role === 'admin' || profile?.role === 'instructor';
+    
+    const [view, setView] = useState<'list' | 'album'>('list');
+    const [currentAlbum, setCurrentAlbum] = useState<Album | null>(null);
+    
+    if (view === 'list') {
+        return <AlbumsList canManage={canManage} onSelectAlbum={(album) => {
+            setCurrentAlbum(album);
+            setView('album');
+        }} userUid={user?.uid} />;
+    }
+
+    return (
+        <AlbumPhotos 
+            album={currentAlbum!} 
+            canManage={canManage} 
+            onBack={() => {
+                setCurrentAlbum(null);
+                setView('list');
+            }} 
+            userUid={user?.uid}
+        />
+    );
+}
+
+// --- KOMPONENT 1: LISTA ALBUMÓW ---
+function AlbumsList({ canManage, onSelectAlbum, userUid }: { canManage: boolean, onSelectAlbum: (a: Album) => void, userUid?: string }) {
+    const [albums, setAlbums] = useState<Album[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const q = query(collection(db, "teams", "folkbase", "albums"), orderBy("createdAt", "desc"));
+        const unsub = onSnapshot(q, (snap) => {
+            setAlbums(snap.docs.map(d => ({ id: d.id, ...d.data() } as Album)));
+            setLoading(false);
+        });
+        return () => unsub();
+    }, []);
+
+    const handleCreateAlbum = async () => {
+        const title = prompt("Podaj nazwę nowego folderu (np. Obóz 2023):");
+        if (!title || !userUid) return;
+
+        // TOAST: Loading (opcjonalne, ale ładne)
+        const toastId = toast.loading("Tworzenie folderu...");
+
+        try {
+            await addDoc(collection(db, "teams", "folkbase", "albums"), {
+                title,
+                createdAt: serverTimestamp(),
+                createdBy: userUid
+            });
+            // TOAST: Sukces
+            toast.success("Folder utworzony!", { id: toastId });
+        } catch (error) { 
+            console.error(error); 
+            // TOAST: Błąd
+            toast.error("Nie udało się utworzyć folderu.", { id: toastId });
+        }
+    };
+
+    const handleDeleteAlbum = async (id: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!window.confirm("Usunąć ten folder? Zdjęcia w środku też znikną z widoku.")) return;
+        
+        try {
+            await deleteDoc(doc(db, "teams", "folkbase", "albums", id));
+            toast.success("Folder usunięty.");
+        } catch (error) { 
+            console.error(error);
+            toast.error("Błąd podczas usuwania."); 
+        }
+    };
+
+    if (loading) return <div className="p-8 text-gray-500">Ładowanie folderów...</div>;
+
+    return (
+        <div className="space-y-6">
+            <div className="flex justify-between items-center">
+                <div>
+                    <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Galeria Zespołu</h1>
+                    <p className="text-gray-500 dark:text-slate-400">Wybierz folder, aby zobaczyć zdjęcia.</p>
+                </div>
+                {canManage && (
+                    <button onClick={handleCreateAlbum} className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition">
+                        <FolderPlus size={20} /> Utwórz Folder
+                    </button>
+                )}
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {albums.map(album => (
+                    <div 
+                        key={album.id} 
+                        onClick={() => onSelectAlbum(album)}
+                        className="group bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 p-6 rounded-xl cursor-pointer hover:shadow-lg hover:border-indigo-500 transition flex flex-col items-center justify-center gap-4 relative"
+                    >
+                        <Folder size={64} className="text-indigo-200 dark:text-slate-600 group-hover:text-indigo-500 transition-colors" />
+                        <h3 className="font-bold text-gray-800 dark:text-white text-center">{album.title}</h3>
+                        
+                        {canManage && (
+                            <button 
+                                onClick={(e) => handleDeleteAlbum(album.id, e)}
+                                className="absolute top-2 right-2 p-2 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition"
+                                title="Usuń folder"
+                            >
+                                <Trash2 size={16} />
+                            </button>
+                        )}
+                    </div>
+                ))}
+            </div>
+            
+            {albums.length === 0 && (
+                <div className="text-center py-16 text-gray-400">Brak folderów. Utwórz pierwszy!</div>
+            )}
+        </div>
+    );
+}
+
+// --- KOMPONENT 2: ZDJĘCIA W ALBUMIE ---
+function AlbumPhotos({ album, canManage, onBack, userUid }: { album: Album, canManage: boolean, onBack: () => void, userUid?: string }) {
+    const [photos, setPhotos] = useState<Photo[]>([]);
+    const [uploading, setUploading] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [selectedImage, setSelectedImage] = useState<Photo | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        const q = query(collection(db, "teams", "folkbase", "albums", album.id, "photos"), orderBy("createdAt", "desc"));
+        const unsub = onSnapshot(q, (snap) => {
+            setPhotos(snap.docs.map(d => ({ id: d.id, ...d.data() } as Photo)));
+            setLoading(false);
+        });
+        return () => unsub();
+    }, [album.id]);
+
+    const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !userUid) return;
+
+        setUploading(true);
+        // TOAST: Pokazujemy, że coś się dzieje
+        const toastId = toast.loading("Wgrywanie zdjęcia...");
+
+        try {
+            const url = await uploadCostumeImage(file);
+            await addDoc(collection(db, "teams", "folkbase", "albums", album.id, "photos"), {
+                url,
+                createdAt: serverTimestamp(),
+                uploadedBy: userUid
+            });
+            toast.success("Zdjęcie dodane!", { id: toastId });
+        } catch (error) { 
+            console.error(error); 
+            toast.error("Błąd wgrywania", { id: toastId });
+        } finally { 
+            setUploading(false); 
+        }
+    };
+
+    const handleDeletePhoto = async (photoId: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        if(!window.confirm("Usunąć zdjęcie?")) return;
+        try {
+            await deleteDoc(doc(db, "teams", "folkbase", "albums", album.id, "photos", photoId));
+            toast.success("Zdjęcie usunięte.");
+        } catch (error) {
+            console.error(error);
+            toast.error("Błąd usuwania.");
+        }
+    };
+
+    return (
+        <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-gray-200 dark:border-slate-700 pb-4">
+                <div className="flex items-center gap-3">
+                    <button onClick={onBack} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full transition">
+                        <ArrowLeft size={24} className="text-gray-600 dark:text-slate-300" />
+                    </button>
+                    <div>
+                        <h2 className="text-xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
+                            <Folder size={20} className="text-gray-400"/> {album.title}
+                        </h2>
+                        <p className="text-xs text-gray-500">Liczba zdjęć: {photos.length}</p>
+                    </div>
+                </div>
+
+                {canManage && (
+                    <div>
+                        <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleUpload} />
+                        <button 
+                            onClick={() => fileInputRef.current?.click()} 
+                            disabled={uploading}
+                            className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 flex items-center gap-2 disabled:opacity-50"
+                        >
+                            {uploading ? <Loader2 className="animate-spin" size={20}/> : <Plus size={20}/>}
+                            Dodaj zdjęcie
+                        </button>
+                    </div>
+                )}
+            </div>
+
+            {loading ? <div className="p-8 text-gray-500">Ładowanie zdjęć...</div> : (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {photos.map(photo => (
+                        <div key={photo.id} onClick={() => setSelectedImage(photo)} className="group relative aspect-square bg-gray-100 dark:bg-slate-800 rounded-xl overflow-hidden cursor-pointer">
+                            <img src={photo.url} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" alt="img" />
+                            {canManage && (
+                                <button onClick={(e) => handleDeletePhoto(photo.id, e)} className="absolute top-2 right-2 p-1.5 bg-white/90 text-red-600 rounded opacity-0 group-hover:opacity-100 transition hover:bg-red-50">
+                                    <Trash2 size={16} />
+                                </button>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {photos.length === 0 && !loading && (
+                <div className="text-center py-12 text-gray-400">Ten folder jest pusty.</div>
+            )}
+
+            {selectedImage && (
+                <div className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center p-4" onClick={() => setSelectedImage(null)}>
+                    <button className="absolute top-4 right-4 text-white/70 hover:text-white"><X size={32}/></button>
+                    <img src={selectedImage.url} className="max-w-full max-h-[90vh] rounded shadow-2xl" onClick={e => e.stopPropagation()} alt="preview" />
+                </div>
+            )}
+        </div>
+    );
+}
+
+==================================================
 FILE: src\pages\members\Members.tsx
 ==================================================
-import React, { useEffect, useState } from "react";
-import { collection, onSnapshot, query, orderBy, setDoc, doc, serverTimestamp, deleteDoc, updateDoc, getDocs } from "firebase/firestore";
-import { initializeApp } from "firebase/app";
-import { getAuth, createUserWithEmailAndPassword, signOut } from "firebase/auth";
-import { db, firebaseConfig } from "../../services/firebase";
+import { useEffect, useState } from "react";
+import { collection, onSnapshot, query, orderBy, deleteDoc, doc } from "firebase/firestore";
+import { db } from "../../services/firebase";
 import { MemberProfile } from "../../types";
+import { Search, Trash2, UserCog, Mail, Phone } from "lucide-react";
+import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { Plus, Search, Phone, Mail, Trash2, Pencil, User } from "lucide-react";
-import { toDate } from "../../utils/dates";
-import { isBefore } from "date-fns";
-import { useNavigate } from "react-router-dom";
-
-interface MemberWithStats extends MemberProfile {
-    attendanceRate: number; 
-}
 
 export default function Members() {
   const { profile } = useAuth();
-  const navigate = useNavigate();
-  
-  const [members, setMembers] = useState<MemberWithStats[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [members, setMembers] = useState<MemberProfile[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
-  
-  const [showModal, setShowModal] = useState(false);
-  const [editingMember, setEditingMember] = useState<MemberProfile | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const canManage = profile?.role === 'admin' || profile?.role === 'instructor';
+  const isAdmin = profile?.role === 'admin';
 
   useEffect(() => {
-    const fetchData = async () => {
-        const membersUnsub = onSnapshot(query(collection(db, "teams", "folkbase", "members"), orderBy("lastName")), async (membersSnap) => {
-            let membersData = membersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as MemberProfile[];
-
-            membersData = membersData.filter(member => member.role !== 'admin' && member.role !== 'instructor');
-
-            const scheduleSnap = await getDocs(collection(db, "teams", "folkbase", "schedule"));
-            const pastEvents = scheduleSnap.docs
-                .map(doc => doc.data() as any)
-                .filter(event => isBefore(toDate(event.startDate), new Date()));
-
-            const totalEvents = pastEvents.length;
-
-            const membersWithStats = membersData.map(member => {
-                if (totalEvents === 0) return { ...member, attendanceRate: 0 };
-                
-                const attendedCount = pastEvents.filter(event => 
-                    event.attendees && event.attendees.includes(member.uid)
-                ).length;
-
-                return {
-                    ...member,
-                    attendanceRate: Math.round((attendedCount / totalEvents) * 100)
-                };
-            });
-
-            setMembers(membersWithStats);
-            setLoading(false);
-        });
-
-        return () => membersUnsub();
-    };
-
-    fetchData();
+    const q = query(collection(db, "teams", "folkbase", "members"), orderBy("lastName"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const membersData = snapshot.docs.map((doc) => ({
+        uid: doc.id,
+        ...doc.data(),
+      })) as MemberProfile[];
+      setMembers(membersData);
+      setLoading(false);
+    });
+    return () => unsubscribe();
   }, []);
 
   const handleDelete = async (id: string) => {
-      if(!window.confirm("Czy na pewno usunąć członka? (Konto logowania pozostanie, ale zniknie z list)")) return;
-      try {
-          await deleteDoc(doc(db, "teams", "folkbase", "members", id));
-      } catch (e) { 
-          console.error(e);
-          alert("Błąd usuwania"); 
-      }
+    if (window.confirm("Czy na pewno chcesz usunąć tego członka?")) {
+      await deleteDoc(doc(db, "teams", "folkbase", "members", id));
+    }
   };
 
-  const handleEdit = (member: MemberProfile) => {
-      setEditingMember(member);
-      setShowModal(true);
-  };
-
-  const handleAdd = () => {
-      setEditingMember(null);
-      setShowModal(true);
-  }
-
-  const AttendanceBar = ({ rate }: { rate: number }) => {
-      let color = "bg-green-500";
-      if (rate < 75) color = "bg-yellow-500";
-      if (rate < 50) color = "bg-red-500";
-
-      return (
-          <div className="flex items-center gap-2">
-              <div className="w-16 h-2 bg-gray-100 dark:bg-slate-700 rounded-full overflow-hidden">
-                  <div className={`h-full ${color}`} style={{ width: `${rate}%` }}></div>
-              </div>
-              <span className="text-xs font-bold text-gray-500 dark:text-slate-400">{rate}%</span>
-          </div>
-      );
-  };
-
-  const RoleBadge = ({ role }: { role: string }) => {
-    const colors: Record<string, string> = {
-      admin: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300",
-      instructor: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
-      member: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
-    };
-    return (
-      <span className={`px-2 py-1 rounded-full text-xs font-semibold ${colors[role] || "bg-gray-100 text-gray-800 dark:bg-slate-700 dark:text-slate-300"}`}>
-        {role.toUpperCase()}
-      </span>
-    );
-  };
-
-  const filteredMembers = members.filter(m => 
-      (m.lastName + " " + m.firstName).toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredMembers = members.filter(
+    (m) =>
+      m.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      m.firstName.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  if (loading) return <div className="p-4 text-gray-500 dark:text-slate-400">Ładowanie danych...</div>;
+  if (loading) return <div className="p-8 text-gray-500">Ładowanie listy...</div>;
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Członkowie Zespołu</h1>
-          <p className="text-gray-500 dark:text-slate-400">Zarządzaj tancerzami, instruktorami i kadrą.</p>
+      <div>
+        <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Członkowie Zespołu</h1>
+        <p className="text-gray-500 dark:text-slate-400">Wszyscy w jednym miejscu.</p>
+      </div>
+
+      {/* Wyszukiwarka */}
+      <div className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700">
+        <div className="relative max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+          <input
+            type="text"
+            placeholder="Szukaj po nazwisku..."
+            className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white transition-all"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
         </div>
-        {canManage && (
-            <button onClick={handleAdd} className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition shadow-sm">
-            <Plus size={20} /> Dodaj Członka
-            </button>
-        )}
       </div>
 
-      {/* PASEK WYSZUKIWANIA */}
-      <div className="flex items-center bg-white dark:bg-slate-800 p-2 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 w-full sm:w-96 transition-colors">
-        <Search size={20} className="text-gray-400 ml-2" />
-        <input 
-          type="text" 
-          placeholder="Szukaj po nazwisku..." 
-          className="w-full px-3 py-1 outline-none text-sm bg-transparent text-gray-800 dark:text-white placeholder-gray-400"
-          value={searchTerm}
-          onChange={e => setSearchTerm(e.target.value)}
-        />
+      {/* --- WIDOK DESKTOPOWY (TABELA) --- */}
+      <div className="hidden md:block bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-gray-200 dark:border-slate-700 text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                <th className="p-4">Osoba</th>
+                <th className="p-4">Rola</th>
+                <th className="p-4">Kontakt</th>
+                <th className="p-4">Frekwencja</th>
+                {isAdmin && <th className="p-4 text-right">Akcje</th>}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
+              {filteredMembers.map((member) => (
+                <tr key={member.uid} className="hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors group">
+                  
+                  {/* OSOBA */}
+                  <td className="p-4">
+                    <Link to={`/profile/${member.uid}`} className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-slate-700 flex items-center justify-center text-indigo-700 dark:text-indigo-400 font-bold shrink-0 overflow-hidden border border-gray-200 dark:border-slate-600">
+                         {member.photoUrl ? (
+                             <img src={member.photoUrl} alt="Avatar" className="w-full h-full object-cover" />
+                         ) : (
+                             <span>{member.firstName?.[0]}{member.lastName?.[0]}</span>
+                         )}
+                      </div>
+                      <div>
+                        <p className="font-bold text-gray-800 dark:text-white group-hover:text-indigo-600 transition-colors">
+                            {member.firstName} {member.lastName}
+                        </p>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className={`w-2 h-2 rounded-full ${member.status === 'active' ? 'bg-green-500' : 'bg-gray-300'}`}></span>
+                            <span className="text-xs text-gray-500">{member.status === 'active' ? 'Aktywny' : 'Nieaktywny'}</span>
+                        </div>
+                      </div>
+                    </Link>
+                  </td>
+
+                  {/* ROLA */}
+                  <td className="p-4">
+                    <span className={`
+                        px-2 py-1 rounded-md text-xs font-bold uppercase tracking-wider
+                        ${member.role === 'admin' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' : ''}
+                        ${member.role === 'instructor' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' : ''}
+                        ${member.role === 'member' ? 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400' : ''}
+                    `}>
+                      {member.role}
+                    </span>
+                  </td>
+
+                  {/* KONTAKT */}
+                  <td className="p-4">
+                    <div className="text-sm space-y-1 text-gray-600 dark:text-slate-400">
+                        <div className="flex items-center gap-2">
+                            <Mail size={14} /> {member.email}
+                        </div>
+                        {member.phone && (
+                            <div className="flex items-center gap-2">
+                                <Phone size={14} /> {member.phone}
+                            </div>
+                        )}
+                    </div>
+                  </td>
+
+                  {/* FREKWENCJA */}
+                  <td className="p-4">
+                    <div className="flex items-center gap-2">
+                        <div className="w-24 h-2 bg-gray-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                            <div className="h-full bg-green-500 w-3/4"></div> 
+                        </div>
+                        <span className="text-xs font-bold text-gray-500">75%</span>
+                    </div>
+                  </td>
+
+                  {/* AKCJE */}
+                  {isAdmin && (
+                    <td className="p-4 text-right">
+                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Link 
+                                to={`/profile/${member.uid}`}
+                                className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-lg transition"
+                                title="Zobacz profil / Edytuj"
+                            >
+                                <UserCog size={18} />
+                            </Link>
+                            <button 
+                                onClick={() => handleDelete(member.uid!)}
+                                className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition"
+                                title="Usuń członka"
+                            >
+                                <Trash2 size={18} />
+                            </button>
+                        </div>
+                    </td>
+                  )}
+
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      {/* TABELA */}
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden transition-colors">
-        <table className="w-full text-left border-collapse">
-          <thead className="bg-gray-50 dark:bg-slate-900/50 text-gray-500 dark:text-slate-400 text-xs uppercase font-medium">
-            <tr>
-              <th className="p-4">Osoba</th>
-              <th className="p-4">Rola</th>
-              <th className="p-4 hidden md:table-cell">Kontakt</th>
-              <th className="p-4">Frekwencja</th>
-              <th className="p-4 text-right">Akcje</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100 dark:divide-slate-700 text-sm">
-            {filteredMembers.map((member) => (
-              <tr key={member.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/50 transition">
-                <td className="p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 font-bold">
-                      {member.firstName[0]}{member.lastName[0]}
-                    </div>
-                    <div>
-                      <p className="font-medium text-gray-900 dark:text-white">{member.firstName} {member.lastName}</p>
-                      <span className={`inline-block w-2 h-2 rounded-full mr-1 ${member.status === 'active' ? 'bg-green-500' : 'bg-gray-300 dark:bg-slate-600'}`}></span>
-                      <span className="text-xs text-gray-400 dark:text-slate-500">{member.status === 'active' ? 'Aktywny' : 'Nieaktywny'}</span>
-                    </div>
+      {/* --- WIDOK MOBILNY (KARTY) --- */}
+      <div className="grid grid-cols-1 gap-4 md:hidden">
+          {filteredMembers.map(member => (
+              <div key={member.uid} className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 flex flex-col gap-3 relative">
+                  {/* Nagłówek Karty */}
+                  <Link to={`/profile/${member.uid}`} className="flex items-center gap-3">
+                       <div className="w-12 h-12 rounded-full bg-indigo-100 dark:bg-slate-700 flex items-center justify-center text-indigo-700 dark:text-indigo-400 font-bold shrink-0 overflow-hidden border border-gray-200 dark:border-slate-600">
+                           {member.photoUrl ? (
+                               <img src={member.photoUrl} alt="Avatar" className="w-full h-full object-cover" />
+                           ) : (
+                               <span>{member.firstName?.[0]}{member.lastName?.[0]}</span>
+                           )}
+                       </div>
+                       <div>
+                            <h3 className="font-bold text-gray-800 dark:text-white text-lg leading-tight">
+                                {member.firstName} {member.lastName}
+                            </h3>
+                            <div className="flex items-center gap-2 mt-1">
+                                <span className={`w-2 h-2 rounded-full ${member.status === 'active' ? 'bg-green-500' : 'bg-gray-300'}`}></span>
+                                <span className="text-xs text-gray-500">{member.status === 'active' ? 'Aktywny' : 'Nieaktywny'}</span>
+                            </div>
+                       </div>
+                  </Link>
+                  
+                  {/* Badge Roli */}
+                  <div>
+                    <span className={`
+                        px-2 py-1 rounded-md text-xs font-bold uppercase tracking-wider
+                        ${member.role === 'admin' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' : ''}
+                        ${member.role === 'instructor' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' : ''}
+                        ${member.role === 'member' ? 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400' : ''}
+                    `}>
+                      {member.role}
+                    </span>
                   </div>
-                </td>
-                <td className="p-4">
-                  <RoleBadge role={member.role} />
-                </td>
-                <td className="p-4 hidden md:table-cell text-gray-500 dark:text-slate-400 space-y-1">
-                  <div className="flex items-center gap-2"><Mail size={14} /> {member.email}</div>
-                  {member.phone && <div className="flex items-center gap-2"><Phone size={14} /> {member.phone}</div>}
-                </td>
-                <td className="p-4">
-                    <AttendanceBar rate={member.attendanceRate} />
-                </td>
-                <td className="p-4 text-right">
-                  {canManage && (
-                      <div className="flex justify-end gap-2">
-                          <button 
-                            onClick={() => navigate(`/profile/${member.id}`)}
-                            className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded transition" 
-                            title="Zobacz pełny profil"
-                          >
-                              <User size={16} />
-                          </button>
 
-                          <button onClick={() => handleEdit(member)} className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded transition" title="Szybka Edycja">
-                              <Pencil size={16} />
-                          </button>
-                          <button onClick={() => handleDelete(member.id!)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition" title="Usuń">
-                              <Trash2 size={16} />
-                          </button>
+                  {/* Kontakt */}
+                  <div className="bg-gray-50 dark:bg-slate-900/50 p-3 rounded-lg text-sm space-y-1.5 text-gray-600 dark:text-slate-400">
+                      <div className="flex items-center gap-2">
+                          <Mail size={16} className="text-gray-400" /> 
+                          <span className="truncate">{member.email}</span>
+                      </div>
+                      {member.phone && (
+                          <div className="flex items-center gap-2">
+                              <Phone size={16} className="text-gray-400" /> {member.phone}
+                          </div>
+                      )}
+                  </div>
+                  
+                  {/* Akcje Admina (Absolutnie w rogu) */}
+                  {isAdmin && (
+                      <div className="absolute top-4 right-4 flex gap-2">
+                           <Link to={`/profile/${member.uid}`} className="p-2 bg-gray-100 dark:bg-slate-700 rounded-full text-gray-500 hover:text-indigo-600 transition">
+                               <UserCog size={18} />
+                           </Link>
+                           <button onClick={() => handleDelete(member.uid!)} className="p-2 bg-red-50 dark:bg-red-900/20 rounded-full text-red-500 hover:bg-red-100 transition">
+                               <Trash2 size={18} />
+                           </button>
                       </div>
                   )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        
-        {members.length === 0 && (
-            <div className="p-8 text-center text-gray-500 dark:text-slate-400">Brak członków w zespole.</div>
-        )}
+              </div>
+          ))}
+          
+          {filteredMembers.length === 0 && (
+              <div className="text-center py-10 text-gray-500 dark:text-slate-500">
+                  Brak wyników.
+              </div>
+          )}
       </div>
-
-      {showModal && (
-        <MemberModal 
-            onClose={() => setShowModal(false)} 
-            initialData={editingMember}
-        />
-      )}
     </div>
   );
-}
-
-// --- MODAL (Z OBSŁUGĄ DARK MODE) ---
-function MemberModal({ onClose, initialData }: { onClose: () => void, initialData: MemberProfile | null }) {
-    const isEditing = !!initialData;
-    
-    const [formData, setFormData] = useState({ 
-        firstName: '', lastName: '', email: '', phone: '',
-        password: '',
-        role: 'member' 
-    });
-    const [submitting, setSubmitting] = useState(false);
-
-    useEffect(() => {
-        if (initialData) {
-            setFormData({
-                firstName: initialData.firstName,
-                lastName: initialData.lastName,
-                email: initialData.email,
-                phone: initialData.phone || '',
-                password: '', 
-                role: initialData.role
-            });
-        }
-    }, [initialData]);
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setSubmitting(true);
-
-        try {
-            if (isEditing && initialData?.uid) {
-                await updateDoc(doc(db, "teams", "folkbase", "members", initialData.uid), {
-                    firstName: formData.firstName,
-                    lastName: formData.lastName,
-                    displayName: `${formData.firstName} ${formData.lastName}`,
-                    phone: formData.phone,
-                    role: formData.role
-                });
-                alert("Zaktualizowano dane członka.");
-                onClose();
-
-            } else {
-                const secondaryApp = initializeApp(firebaseConfig, "Secondary");
-                const secondaryAuth = getAuth(secondaryApp);
-
-                const userCredential = await createUserWithEmailAndPassword(secondaryAuth, formData.email, formData.password);
-                const newUser = userCredential.user;
-
-                await setDoc(doc(db, "teams", "folkbase", "members", newUser.uid), {
-                    uid: newUser.uid,
-                    email: formData.email,
-                    firstName: formData.firstName,
-                    lastName: formData.lastName,
-                    displayName: `${formData.firstName} ${formData.lastName}`,
-                    phone: formData.phone,
-                    role: formData.role,
-                    status: 'active',
-                    createdAt: serverTimestamp()
-                });
-
-                await signOut(secondaryAuth);
-                alert(`Stworzono użytkownika! \nLogin: ${formData.email}`);
-                onClose();
-            }
-        } catch (error: any) {
-            console.error(error);
-            alert("Błąd: " + error.message);
-        } finally {
-            setSubmitting(false);
-        }
-    };
-
-    return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-md p-6 border border-gray-100 dark:border-slate-700">
-                <h2 className="text-lg font-bold mb-4 text-gray-800 dark:text-white">{isEditing ? "Edytuj dane" : "Dodaj nowego członka"}</h2>
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                        <input placeholder="Imię" required 
-                            className="border dark:border-slate-600 bg-white dark:bg-slate-900 text-gray-800 dark:text-white p-2 rounded w-full outline-none focus:ring-2 focus:ring-indigo-500" 
-                            value={formData.firstName} onChange={e => setFormData({...formData, firstName: e.target.value})} 
-                        />
-                        <input placeholder="Nazwisko" required 
-                            className="border dark:border-slate-600 bg-white dark:bg-slate-900 text-gray-800 dark:text-white p-2 rounded w-full outline-none focus:ring-2 focus:ring-indigo-500" 
-                            value={formData.lastName} onChange={e => setFormData({...formData, lastName: e.target.value})} 
-                        />
-                    </div>
-                    
-                    <div>
-                        <label className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase">Kontakt</label>
-                        <input type="email" placeholder="Email" required disabled={isEditing} 
-                            className={`border dark:border-slate-600 bg-white dark:bg-slate-900 text-gray-800 dark:text-white p-2 rounded w-full mb-2 outline-none focus:ring-2 focus:ring-indigo-500 ${isEditing ? 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-slate-400' : ''}`} 
-                            value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} 
-                        />
-                        <input type="tel" placeholder="Telefon (opcjonalnie)" 
-                            className="border dark:border-slate-600 bg-white dark:bg-slate-900 text-gray-800 dark:text-white p-2 rounded w-full outline-none focus:ring-2 focus:ring-indigo-500" 
-                            value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} 
-                        />
-                    </div>
-
-                    {!isEditing && (
-                        <div className="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded border border-yellow-100 dark:border-yellow-900/30">
-                            <label className="text-xs font-bold text-yellow-700 dark:text-yellow-500 uppercase mb-1 block">Hasło startowe</label>
-                            <input type="text" placeholder="Minimum 6 znaków" required minLength={6} 
-                                className="border dark:border-slate-600 bg-white dark:bg-slate-900 text-gray-800 dark:text-white p-2 rounded w-full text-sm outline-none" 
-                                value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} 
-                            />
-                        </div>
-                    )}
-
-                    <div>
-                        <label className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase">Rola</label>
-                        <select 
-                            className="border dark:border-slate-600 bg-white dark:bg-slate-900 text-gray-800 dark:text-white p-2 rounded w-full outline-none focus:ring-2 focus:ring-indigo-500" 
-                            value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})}
-                        >
-                            <option value="member">Członek (Tancerz)</option>
-                            <option value="instructor">Instruktor</option>
-                            <option value="admin">Administrator</option>
-                        </select>
-                    </div>
-
-                    <div className="flex justify-end gap-3 mt-6">
-                        <button type="button" onClick={onClose} className="px-4 py-2 text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded transition">Anuluj</button>
-                        <button type="submit" disabled={submitting} className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50 transition">
-                            {submitting ? "Zapisywanie..." : (isEditing ? "Zapisz zmiany" : "Utwórz konto")}
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    )
 }
 
 ==================================================
@@ -2510,14 +2997,15 @@ export default function CostumeManager({ memberId }: CostumeManagerProps) {
 ==================================================
 FILE: src\pages\profile\Profile.tsx
 ==================================================
-import { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { db } from "../../services/firebase";
-import { MemberProfile } from "../../types";
-import { User, Phone, MapPin, Calendar, Ruler, Hash, Mail, Edit2, Save, X, ArrowLeft } from "lucide-react";
+import { uploadAvatar } from "../../services/mediaService";
+import { MemberProfile, UserRole } from "../../types";
+import { User, Phone, MapPin, Calendar, Ruler, Hash, Mail, Edit2, Save, X, ArrowLeft, Camera, Loader2} from "lucide-react";
 import { useParams, useNavigate } from "react-router-dom";
-import CostumeManager from "./CostumeManager"; // <--- NOWY IMPORT
+import CostumeManager from "./CostumeManager";
 
 export default function Profile() {
   const { user, profile: currentUserProfile } = useAuth(); 
@@ -2527,14 +3015,18 @@ export default function Profile() {
   const [profileData, setProfileData] = useState<MemberProfile | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   
   const [formData, setFormData] = useState<Partial<MemberProfile>>({});
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const targetId = id && (currentUserProfile?.role === 'admin' || currentUserProfile?.role === 'instructor') 
-    ? id 
-    : user?.uid;
+  const isOwnProfile = !id || id === user?.uid;
+  const targetId = id ? id : user?.uid;
+  const canEdit = isOwnProfile || currentUserProfile?.role === 'admin';
+  const isAdmin = currentUserProfile?.role === 'admin';
 
-  const canEdit = targetId === user?.uid || currentUserProfile?.role === 'admin';
+  // OCHRONA DANYCH: Wrażliwe sekcje widzi tylko Admin lub Właściciel
+  const canViewSensitive = isOwnProfile || isAdmin;
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -2553,16 +3045,36 @@ export default function Profile() {
   }, [targetId]);
 
   const handleSave = async () => {
-      if (!targetId) return;
+      if (!targetId || !profileData) return;
       try {
           await updateDoc(doc(db, "teams", "folkbase", "members", targetId), formData);
-          // @ts-expect-error - ignorujemy brak wszystkich pól przy łączeniu
-          setProfileData({ ...profileData, ...formData });
+          
+          setProfileData({ ...profileData, ...formData } as MemberProfile);
+          
           setIsEditing(false);
           alert("Profil zaktualizowany!");
       } catch (error) {
           console.error(error);
-          alert("Błąd zapisu.");
+          alert("Błąd zapisu. Sprawdź uprawnienia lub połączenie.");
+      }
+  };
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file || !targetId) return;
+
+      setUploadingAvatar(true);
+      try {
+          const url = await uploadAvatar(file, targetId);
+          await updateDoc(doc(db, "teams", "folkbase", "members", targetId), { photoUrl: url });
+          
+          setProfileData(prev => prev ? ({ ...prev, photoUrl: url }) : null);
+          setFormData(prev => ({ ...prev, photoUrl: url }));
+      } catch (error) {
+          console.error("Avatar upload failed:", error);
+          alert("Nie udało się wgrać zdjęcia.");
+      } finally {
+          setUploadingAvatar(false);
       }
   };
 
@@ -2572,106 +3084,163 @@ export default function Profile() {
   return (
     <div className="max-w-5xl mx-auto space-y-6 pb-10">
       
-      {id && (
+      {!isOwnProfile && (
           <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-gray-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition mb-4">
               <ArrowLeft size={20} /> Wróć do listy
           </button>
       )}
 
-      {/* HEADER */}
-      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-200 dark:border-slate-700 p-6 md:p-8 flex flex-col md:flex-row items-center md:items-start gap-8 relative transition-colors">
+      {/* --- NAGŁÓWEK (WSPÓLNY) --- */}
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 p-6 md:p-8 flex flex-col md:flex-row items-center md:items-start gap-8 relative transition-colors">
         
         {canEdit && (
             <button 
-                onClick={() => isEditing ? setIsEditing(false) : setIsEditing(true)}
-                className="absolute top-6 right-6 p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-lg transition"
+                onClick={() => setIsEditing(!isEditing)}
+                className={`absolute top-6 right-6 p-2 rounded-lg transition ${isEditing ? 'bg-red-50 text-red-600 dark:bg-red-900/20' : 'text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30'}`}
+                title={isEditing ? "Anuluj edycję" : "Edytuj profil"}
             >
                 {isEditing ? <X size={24} /> : <Edit2 size={24} />}
             </button>
         )}
 
-        <div className="w-32 h-32 md:w-40 md:h-40 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center text-4xl font-bold text-white shadow-lg shrink-0">
-            {profileData.firstName[0]}{profileData.lastName[0]}
-        </div>
-
-        <div className="text-center md:text-left space-y-2 flex-1">
-            <h1 className="text-3xl font-bold text-gray-800 dark:text-white">{profileData.firstName} {profileData.lastName}</h1>
-            <div className="flex items-center justify-center md:justify-start gap-2">
-                <span className="px-3 py-1 bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 rounded-full text-xs font-bold uppercase tracking-wider">
-                    {profileData.role}
-                </span>
-                <span className={`w-3 h-3 rounded-full ${profileData.status === 'active' ? 'bg-green-500' : 'bg-gray-400'}`}></span>
-            </div>
-            
-            <div className="pt-4 flex flex-col md:flex-row gap-4 text-gray-500 dark:text-slate-400 text-sm">
-                <div className="flex items-center gap-2">
-                    <Mail size={16} /> {profileData.email}
-                </div>
-                {profileData.phone && (
-                    <div className="flex items-center gap-2">
-                        <Phone size={16} /> {profileData.phone}
+        <div className="relative group">
+            <div className="w-32 h-32 md:w-40 md:h-40 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center text-4xl font-bold text-white shadow-lg shrink-0 overflow-hidden border-4 border-white dark:border-slate-700">
+                {profileData.photoUrl ? (
+                    <img src={profileData.photoUrl} alt="Avatar" className="w-full h-full object-cover" />
+                ) : (
+                    <span>{profileData.firstName[0]}{profileData.lastName[0]}</span>
+                )}
+                
+                {uploadingAvatar && (
+                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                        <Loader2 className="animate-spin text-white" size={32} />
                     </div>
                 )}
             </div>
+
+            {isEditing && (
+                <div 
+                    onClick={() => fileInputRef.current?.click()}
+                    className="absolute bottom-0 right-0 p-2 bg-white dark:bg-slate-700 rounded-full shadow-md cursor-pointer hover:scale-110 transition text-gray-600 dark:text-slate-200 border border-gray-200 dark:border-slate-600"
+                    title="Zmień zdjęcie"
+                >
+                    <Camera size={20} />
+                    <input type="file" ref={fileInputRef} onChange={handleAvatarChange} className="hidden" accept="image/*" />
+                </div>
+            )}
+        </div>
+
+        <div className="text-center md:text-left space-y-3 flex-1 w-full">
+            <div>
+                {isEditing && isAdmin ? (
+                    <div className="flex gap-2 justify-center md:justify-start">
+                        <input className="text-2xl font-bold border-b border-gray-300 dark:border-slate-600 bg-transparent outline-none w-1/3" value={formData.firstName} onChange={e => setFormData({...formData, firstName: e.target.value})} placeholder="Imię" />
+                        <input className="text-2xl font-bold border-b border-gray-300 dark:border-slate-600 bg-transparent outline-none w-1/3" value={formData.lastName} onChange={e => setFormData({...formData, lastName: e.target.value})} placeholder="Nazwisko" />
+                    </div>
+                ) : (
+                    <h1 className="text-3xl font-bold text-gray-800 dark:text-white">{profileData.firstName} {profileData.lastName}</h1>
+                )}
+            </div>
+
+            <div className="flex items-center justify-center md:justify-start gap-3 flex-wrap">
+                {isEditing && isAdmin ? (
+                    <select 
+                        className="px-3 py-1 bg-gray-100 dark:bg-slate-700 rounded-lg text-sm outline-none border border-transparent focus:border-indigo-500"
+                        value={formData.role} 
+                        onChange={e => setFormData({...formData, role: e.target.value as UserRole})}
+                    >
+                        <option value="member">Członek</option>
+                        <option value="instructor">Instruktor</option>
+                        <option value="admin">Administrator</option>
+                    </select>
+                ) : (
+                    <span className="px-3 py-1 bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 rounded-full text-xs font-bold uppercase tracking-wider">
+                        {profileData.role === 'member' ? 'Tancerz' : profileData.role}
+                    </span>
+                )}
+
+                <span className={`px-2 py-1 rounded-full text-xs font-medium border ${profileData.status === 'active' ? 'border-green-200 text-green-700 bg-green-50 dark:bg-green-900/20 dark:text-green-400' : 'border-gray-200 text-gray-500'}`}>
+                    {profileData.status === 'active' ? 'Aktywny' : 'Nieaktywny'}
+                </span>
+            </div>
+           
+            {/* DANE KONTAKTOWE (Zostają widoczne dla wszystkich) */}
+            <div className="pt-4 flex flex-col md:flex-row gap-6 text-gray-500 dark:text-slate-400 text-sm">
+                <div className="flex items-center gap-2">
+                    <Mail size={16} /> 
+                    {isEditing && isAdmin ? (
+                        <input className="border-b border-gray-300 dark:border-slate-600 bg-transparent outline-none" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
+                    ) : profileData.email}
+                </div>
+                <div className="flex items-center gap-2">
+                    <Phone size={16} />
+                    {isEditing ? (
+                        <input className="border-b border-gray-300 dark:border-slate-600 bg-transparent outline-none" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} placeholder="Telefon" />
+                    ) : (profileData.phone || "Brak telefonu")}
+                </div>
+            </div>
+
         </div>
       </div>
 
-      {/* SZCZEGÓŁY - GRID */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {/* --- GRID Z DANYMI --- */}
+      {/* Jeśli widzimy tylko Parametry, to Grid ma 1 kolumnę (pełna szerokość). Jeśli widzimy wszystko - 2 kolumny */}
+      <div className={`grid grid-cols-1 ${canViewSensitive ? 'md:grid-cols-2' : ''} gap-6`}>
           
-          {/* KARTA 1: DANE OSOBOWE */}
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-200 dark:border-slate-700 p-6 transition-colors">
-              <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2 border-b dark:border-slate-700 pb-2">
-                  <User size={20} className="text-indigo-600 dark:text-indigo-400" /> Dane Osobowe
-              </h3>
-              
-              <div className="space-y-4">
-                  <InputGroup label="Data urodzenia" icon={<Calendar size={16}/>} isEditing={isEditing} 
-                      value={formData.birthDate} onChange={(v: string) => setFormData({...formData, birthDate: v})} type="date" />
+          {/* SEKCJA 1: DANE OSOBOWE - RENDEROWANA TYLKO DLA UPRAWNIONYCH */}
+          {canViewSensitive && (
+              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 p-6 transition-colors">
+                  <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2 border-b border-gray-100 dark:border-slate-700 pb-3">
+                      <User size={20} className="text-indigo-600 dark:text-indigo-400" /> Dane Osobowe
+                  </h3>
                   
-                  <InputGroup label="Miejsce urodzenia" icon={<MapPin size={16}/>} isEditing={isEditing} 
-                      value={formData.placeOfBirth} onChange={(v: string) => setFormData({...formData, placeOfBirth: v})} />
-                  
-                  <InputGroup label="PESEL" icon={<Hash size={16}/>} isEditing={isEditing} 
-                      value={formData.pesel} onChange={(v: string) => setFormData({...formData, pesel: v})} />
-                  
-                  <InputGroup label="Adres zamieszkania" icon={<MapPin size={16}/>} isEditing={isEditing} 
-                      value={formData.address} onChange={(v: string) => setFormData({...formData, address: v})} />
+                  <div className="space-y-4">
+                      <InputGroup label="Data urodzenia" icon={<Calendar size={16}/>} isEditing={isEditing} 
+                          value={formData.birthDate} onChange={(v: string) => setFormData({...formData, birthDate: v})} type="date" />
+                      
+                      <InputGroup label="Miejsce urodzenia" icon={<MapPin size={16}/>} isEditing={isEditing} 
+                          value={formData.placeOfBirth} onChange={(v: string) => setFormData({...formData, placeOfBirth: v})} />
+                      
+                      <InputGroup label="PESEL" icon={<Hash size={16}/>} isEditing={isEditing} 
+                          value={formData.pesel} onChange={(v: string) => setFormData({...formData, pesel: v})} />
+                      
+                      <InputGroup label="Numer Dowodu" icon={<Hash size={16}/>} isEditing={isEditing} 
+                          value={formData.idNumber} onChange={(v: string) => setFormData({...formData, idNumber: v})} />
+                      
+                      <InputGroup label="Adres zamieszkania" icon={<MapPin size={16}/>} isEditing={isEditing} 
+                          value={formData.address} onChange={(v: string) => setFormData({...formData, address: v})} />
+                  </div>
               </div>
-          </div>
+          )}
 
-          {/* KARTA 2: DANE ZESPOŁOWE */}
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-200 dark:border-slate-700 p-6 transition-colors">
-              <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2 border-b dark:border-slate-700 pb-2">
+          {/* SEKCJA 2: PARAMETRY (Zawsze widoczna) */}
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 p-6 transition-colors">
+              <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2 border-b border-gray-100 dark:border-slate-700 pb-3">
                   <Ruler size={20} className="text-indigo-600 dark:text-indigo-400" /> Parametry i Zespół
               </h3>
               
               <div className="space-y-4">
-                  <InputGroup label="Data wstąpienia" icon={<Calendar size={16}/>} isEditing={isEditing} 
+                  <InputGroup label="Data wstąpienia" icon={<Calendar size={16}/>} isEditing={isEditing && isAdmin} 
                       value={formData.joinDate} onChange={(v: string) => setFormData({...formData, joinDate: v})} type="date" />
                   
                   <InputGroup label="Wzrost (cm)" icon={<Ruler size={16}/>} isEditing={isEditing} 
                       value={formData.height} onChange={(v: string) => setFormData({...formData, height: Number(v)})} type="number" />
-                  
-                  <InputGroup label="Numer Dowodu" icon={<Hash size={16}/>} isEditing={isEditing} 
-                      value={formData.idNumber} onChange={(v: string) => setFormData({...formData, idNumber: v})} />
               </div>
           </div>
 
-          {/* --- NOWOŚĆ: MODUŁ STROJÓW (ROZCIĄGNIĘTY NA DOLE) --- */}
-          {profileData?.uid && (
+          {/* SEKCJA 3: EKWIPUNEK - RENDEROWANA TYLKO DLA UPRAWNIONYCH */}
+          {canViewSensitive && profileData?.uid && (
               <div className="md:col-span-2">
                   <CostumeManager memberId={profileData.uid} />
               </div>
           )}
-
       </div>
 
       {isEditing && (
-          <div className="flex justify-end">
+          <div className="fixed bottom-6 right-6 z-50 animate-in slide-in-from-bottom-4">
               <button 
                 onClick={handleSave}
-                className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg hover:bg-indigo-700 transition flex items-center gap-2"
+                className="bg-indigo-600 text-white px-6 py-4 rounded-full font-bold shadow-xl hover:bg-indigo-700 transition flex items-center gap-2 hover:scale-105"
               >
                   <Save size={20} /> Zapisz zmiany
               </button>
@@ -2693,19 +3262,19 @@ interface InputGroupProps {
 function InputGroup({ label, value, onChange, isEditing, icon, type = "text" }: InputGroupProps) {
     return (
         <div>
-            <label className="text-xs font-bold text-gray-400 dark:text-slate-500 uppercase mb-1 flex items-center gap-1">
+            <label className="text-xs font-bold text-gray-400 dark:text-slate-500 uppercase mb-1 flex items-center gap-1.5">
                 {icon} {label}
             </label>
             {isEditing ? (
                 <input 
                     type={type}
-                    className="w-full border dark:border-slate-600 bg-white dark:bg-slate-900 text-gray-800 dark:text-white rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none transition-colors"
+                    className="w-full border dark:border-slate-600 bg-gray-50 dark:bg-slate-900 text-gray-800 dark:text-white rounded-lg p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                     value={value || ''}
                     onChange={e => onChange(e.target.value)}
                 />
             ) : (
-                <p className="text-gray-800 dark:text-slate-200 font-medium h-9 flex items-center border border-transparent">
-                    {value || <span className="text-gray-300 dark:text-slate-600 italic">Brak danych</span>}
+                <p className="text-gray-800 dark:text-slate-200 font-medium h-10 flex items-center border-b border-transparent">
+                    {value || <span className="text-gray-300 dark:text-slate-600 italic text-sm">Brak danych</span>}
                 </p>
             )}
         </div>
@@ -3075,7 +3644,7 @@ FILE: src\pages\schedule\Schedule.tsx
 import React, { useEffect, useState } from "react";
 import { 
   format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, 
-  isSameMonth, isSameDay, addMonths, subMonths, isToday, isBefore, startOfDay 
+  isSameMonth, addMonths, subMonths, isToday, isBefore, startOfDay, isWithinInterval, endOfDay 
 } from "date-fns";
 import { pl } from "date-fns/locale";
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, Timestamp } from "firebase/firestore";
@@ -3083,8 +3652,7 @@ import { db } from "../../services/firebase";
 import { EventItem } from "../../types";
 import { useAuth } from "../../context/AuthContext";
 import { toDate } from "../../utils/dates";
-import { ChevronLeft, ChevronRight, Plus, MapPin, X, Trash2 } from "lucide-react";
-// NOWY IMPORT
+import { ChevronLeft, ChevronRight, Plus, MapPin, X, Trash2, Calendar } from "lucide-react";
 import { sendNotificationToAll } from "../../utils/emailNotification";
 
 export default function Schedule() {
@@ -3110,6 +3678,7 @@ export default function Schedule() {
     const q = query(collection(db, "teams", "folkbase", "schedule"));
     const unsub = onSnapshot(q, (snapshot) => {
       const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as EventItem));
+      // Sortujemy po dacie rozpoczęcia
       items.sort((a, b) => toDate(a.startDate).getTime() - toDate(b.startDate).getTime());
       setEvents(items);
     });
@@ -3164,7 +3733,8 @@ export default function Schedule() {
         </div>
       </div>
 
-      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100 dark:border-slate-700 overflow-hidden flex flex-col flex-1 transition-colors">
+      {/* --- WIDOK DESKTOPOWY (SIATKA) --- */}
+      <div className="hidden md:flex bg-white dark:bg-slate-800 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100 dark:border-slate-700 overflow-hidden flex-col flex-1 transition-colors">
         <div className="grid grid-cols-7 border-b border-gray-100 dark:border-slate-700 bg-gray-50/80 dark:bg-slate-900/50 backdrop-blur sticky top-0 z-10">
             {weekDays.map(day => (
                 <div key={day} className="py-3 text-center text-xs font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest">
@@ -3175,7 +3745,14 @@ export default function Schedule() {
 
         <div className="grid grid-cols-7 auto-rows-fr bg-gray-100 dark:bg-slate-700 gap-px flex-1 min-h-[600px]"> 
             {calendarDays.map((day) => {
-                const allDayEvents = events.filter(e => isSameDay(toDate(e.startDate), day));
+                // ZMIANA LOGIKI: Sprawdzamy czy dzień mieści się w przedziale (start, koniec)
+                const allDayEvents = events.filter(e => {
+                    const start = startOfDay(toDate(e.startDate));
+                    const end = endOfDay(toDate(e.endDate));
+                    // Sprawdzamy czy 'day' jest >= start i <= end
+                    return isWithinInterval(day, { start, end });
+                });
+                
                 const visibleEvents = allDayEvents.slice(0, MAX_VISIBLE_EVENTS);
                 const hiddenEventsCount = allDayEvents.length - MAX_VISIBLE_EVENTS;
 
@@ -3226,7 +3803,6 @@ export default function Schedule() {
                                         ${getEventStyle(event.type)}
                                     `}
                                 >
-                                    <span className="opacity-80 text-[10px] tracking-tight font-mono">{format(toDate(event.startDate), "HH:mm")}</span>
                                     <span className="truncate flex-1">{event.title}</span>
                                 </div>
                             ))}
@@ -3241,6 +3817,76 @@ export default function Schedule() {
                 );
             })}
         </div>
+      </div>
+
+      {/* --- WIDOK MOBILNY (AGENDA) --- */}
+      <div className="md:hidden space-y-4">
+         {canManage && (
+             <button 
+                onClick={() => { setSelectedDateForNew(new Date()); setSelectedEvent(null); setIsModalOpen(true); }}
+                className="w-full py-3 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded-xl font-bold flex items-center justify-center gap-2"
+             >
+                 <Plus size={20} /> Dodaj wydarzenie
+             </button>
+         )}
+
+         {calendarDays.map(day => {
+             // ZMIANA LOGIKI RÓWNIEŻ DLA MOBILE: Sprawdzamy przedział
+             const dayEvents = events.filter(e => {
+                const start = startOfDay(toDate(e.startDate));
+                const end = endOfDay(toDate(e.endDate));
+                return isWithinInterval(day, { start, end });
+             });
+
+             if(dayEvents.length === 0) return null; 
+             
+             const isDayToday = isToday(day);
+
+             return (
+                 <div key={day.toISOString()} className="space-y-2">
+                     <div className={`text-sm font-bold uppercase tracking-wider flex items-center gap-2 ${isDayToday ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-slate-400'}`}>
+                        {isDayToday && <div className="w-2 h-2 rounded-full bg-indigo-600"></div>}
+                        {format(day, "d MMMM (EEEE)", { locale: pl })}
+                     </div>
+                     
+                     <div className="space-y-2">
+                         {dayEvents.map(event => (
+                             <div 
+                                key={event.id}
+                                onClick={(e) => handleEventClick(e, event)}
+                                className={`
+                                    p-4 rounded-xl cursor-pointer bg-white dark:bg-slate-800 border-l-4 shadow-sm
+                                    ${getEventStyle(event.type).replace('truncate', '')}
+                                `}
+                             >
+                                 <div className="flex justify-between items-start">
+                                     <div>
+                                        <div className="font-bold text-base mb-1">{event.title}</div>
+                                        <div className="text-xs opacity-80 flex items-center gap-1.5">
+                                            <span>{format(toDate(event.startDate), "HH:mm")} - {format(toDate(event.endDate), "HH:mm")}</span>
+                                            {event.location && <span>• {event.location}</span>}
+                                        </div>
+                                     </div>
+                                 </div>
+                             </div>
+                         ))}
+                     </div>
+                 </div>
+             )
+         })}
+         
+         {calendarDays.every(day => {
+            return events.filter(e => {
+                const start = startOfDay(toDate(e.startDate));
+                const end = endOfDay(toDate(e.endDate));
+                return isWithinInterval(day, { start, end });
+            }).length === 0;
+         }) && (
+             <div className="text-center py-10 text-gray-400 dark:text-slate-500 flex flex-col items-center gap-2">
+                 <Calendar size={48} className="opacity-20" />
+                 <span>Brak wydarzeń w tym miesiącu.</span>
+             </div>
+         )}
       </div>
 
       {isModalOpen && (
@@ -3272,7 +3918,6 @@ function EventModal({ onClose, eventToEdit, initialDate, canManage }: any) {
         startDate: formatDateForInput(defaultStart),
         endDate: formatDateForInput(defaultEnd),
     });
-    // Nowy stan checkboxa powiadomień
     const [sendEmail, setSendEmail] = useState(false);
 
     useEffect(() => {
@@ -3302,7 +3947,6 @@ function EventModal({ onClose, eventToEdit, initialDate, canManage }: any) {
             } else {
                 await addDoc(collection(db, "teams", "folkbase", "schedule"), payload);
                 
-                // --- WYSYŁKA ---
                 if (sendEmail) {
                     await sendNotificationToAll({
                         type: "Nowe Wydarzenie",
@@ -3329,8 +3973,8 @@ function EventModal({ onClose, eventToEdit, initialDate, canManage }: any) {
 
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all scale-100 border border-gray-100 dark:border-slate-700">
-                <div className="p-5 border-b border-gray-100 dark:border-slate-700 flex justify-between items-center bg-gray-50 dark:bg-slate-900/50">
+            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all scale-100 border border-gray-100 dark:border-slate-700 max-h-[90vh] overflow-y-auto">
+                <div className="p-5 border-b border-gray-100 dark:border-slate-700 flex justify-between items-center bg-gray-50 dark:bg-slate-900/50 sticky top-0 z-10 backdrop-blur">
                     <h3 className="font-bold text-gray-800 dark:text-white text-lg">
                         {eventToEdit ? "Edytuj wydarzenie" : "Nowe wydarzenie"}
                     </h3>
@@ -3398,7 +4042,6 @@ function EventModal({ onClose, eventToEdit, initialDate, canManage }: any) {
                         />
                     </div>
 
-                    {/* CHECKBOX DLA MAILA (Tylko przy tworzeniu nowego) */}
                     {canManage && !eventToEdit && (
                         <div className="flex items-center gap-2 pt-2">
                             <input 
@@ -3516,28 +4159,33 @@ export const storage = getStorage(app);
 FILE: src\services\mediaService.ts
 ==================================================
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { storage, db } from "./firebase";
-import { addDoc, collection, serverTimestamp } from "firebase/firestore";
+import { storage } from "./firebase";
 
-export async function uploadTeamFile(file: File, teamId: string, uploadedBy: string) {
-  const path = `teams/${teamId}/media/${Date.now()}_${file.name}`;
+/**
+ * Przesyła zdjęcie stroju do Firebase Storage i zwraca publiczny link (URL).
+ * @param file Plik wybrany przez użytkownika
+ * @returns Promise z linkiem do zdjęcia
+ */
+export async function uploadCostumeImage(file: File): Promise<string> {
+  // Tworzymy unikalną ścieżkę: costumes/TIMESTAMP_NAZWAPLIKU
+  // Dzięki temu pliki o tej samej nazwie się nie nadpiszą
+  const path = `teams/folkbase/costumes/${Date.now()}_${file.name}`;
   const storageRef = ref(storage, path);
-  const snap = await uploadBytes(storageRef, file);
-  const url = await getDownloadURL(snap.ref);
 
-  const doc = await addDoc(collection(db, "media"), {
-    teamId,
-    storagePath: path,
-    url,
-    fileName: file.name,
-    type: file.type,
-    uploadedBy,
-    createdAt: serverTimestamp()
-  });
+  // 1. Wyślij plik
+  const snapshot = await uploadBytes(storageRef, file);
 
-  return { id: doc.id, url, path };
+  // 2. Pobierz publiczny link
+  const url = await getDownloadURL(snapshot.ref);
+  
+  return url;
 }
-
+export async function uploadAvatar(file: File, userId: string): Promise<string> {
+  const path = `teams/folkbase/avatars/${userId}_${Date.now()}`;
+  const storageRef = ref(storage, path);
+  const snapshot = await uploadBytes(storageRef, file);
+  return await getDownloadURL(snapshot.ref);
+}
 
 ==================================================
 FILE: src\types\index.ts
@@ -3554,6 +4202,7 @@ export interface MemberProfile {
   email: string;
   role: UserRole;
   status: "active" | "pending" | "disabled";
+  photoUrl?: string;
   phone?: string;
   joinedAt?: any; // Timestamp z Firestore
   birthDate?: string; // Format YYYY-MM-DD

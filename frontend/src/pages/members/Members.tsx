@@ -45,7 +45,7 @@ export default function Members() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Członkowie Zespołu</h1>
-        <p className="text-gray-500 dark:text-slate-400">Zarządzaj tancerzami, instruktorami i kadrą.</p>
+        <p className="text-gray-500 dark:text-slate-400">Wszyscy w jednym miejscu.</p>
       </div>
 
       {/* Wyszukiwarka */}

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { 
   format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, 
-  isSameMonth, isSameDay, addMonths, subMonths, isToday, isBefore, startOfDay 
+  isSameMonth, addMonths, subMonths, isToday, isBefore, startOfDay, isWithinInterval, endOfDay 
 } from "date-fns";
 import { pl } from "date-fns/locale";
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, Timestamp } from "firebase/firestore";
@@ -35,6 +35,7 @@ export default function Schedule() {
     const q = query(collection(db, "teams", "folkbase", "schedule"));
     const unsub = onSnapshot(q, (snapshot) => {
       const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as EventItem));
+      // Sortujemy po dacie rozpoczęcia
       items.sort((a, b) => toDate(a.startDate).getTime() - toDate(b.startDate).getTime());
       setEvents(items);
     });
@@ -101,7 +102,14 @@ export default function Schedule() {
 
         <div className="grid grid-cols-7 auto-rows-fr bg-gray-100 dark:bg-slate-700 gap-px flex-1 min-h-[600px]"> 
             {calendarDays.map((day) => {
-                const allDayEvents = events.filter(e => isSameDay(toDate(e.startDate), day));
+                // ZMIANA LOGIKI: Sprawdzamy czy dzień mieści się w przedziale (start, koniec)
+                const allDayEvents = events.filter(e => {
+                    const start = startOfDay(toDate(e.startDate));
+                    const end = endOfDay(toDate(e.endDate));
+                    // Sprawdzamy czy 'day' jest >= start i <= end
+                    return isWithinInterval(day, { start, end });
+                });
+                
                 const visibleEvents = allDayEvents.slice(0, MAX_VISIBLE_EVENTS);
                 const hiddenEventsCount = allDayEvents.length - MAX_VISIBLE_EVENTS;
 
@@ -170,7 +178,6 @@ export default function Schedule() {
 
       {/* --- WIDOK MOBILNY (AGENDA) --- */}
       <div className="md:hidden space-y-4">
-         {/* Przycisk dodawania na mobile */}
          {canManage && (
              <button 
                 onClick={() => { setSelectedDateForNew(new Date()); setSelectedEvent(null); setIsModalOpen(true); }}
@@ -181,8 +188,14 @@ export default function Schedule() {
          )}
 
          {calendarDays.map(day => {
-             const dayEvents = events.filter(e => isSameDay(toDate(e.startDate), day));
-             if(dayEvents.length === 0) return null; // Ukrywamy dni bez wydarzeń
+             // ZMIANA LOGIKI RÓWNIEŻ DLA MOBILE: Sprawdzamy przedział
+             const dayEvents = events.filter(e => {
+                const start = startOfDay(toDate(e.startDate));
+                const end = endOfDay(toDate(e.endDate));
+                return isWithinInterval(day, { start, end });
+             });
+
+             if(dayEvents.length === 0) return null; 
              
              const isDayToday = isToday(day);
 
@@ -200,7 +213,7 @@ export default function Schedule() {
                                 onClick={(e) => handleEventClick(e, event)}
                                 className={`
                                     p-4 rounded-xl cursor-pointer bg-white dark:bg-slate-800 border-l-4 shadow-sm
-                                    ${getEventStyle(event.type).replace('truncate', '')} // Usuwamy truncate żeby na mobile zawijało tekst
+                                    ${getEventStyle(event.type).replace('truncate', '')}
                                 `}
                              >
                                  <div className="flex justify-between items-start">
@@ -219,8 +232,13 @@ export default function Schedule() {
              )
          })}
          
-         {/* Jeśli w całym miesiącu nie ma wydarzeń */}
-         {calendarDays.every(day => events.filter(e => isSameDay(toDate(e.startDate), day)).length === 0) && (
+         {calendarDays.every(day => {
+            return events.filter(e => {
+                const start = startOfDay(toDate(e.startDate));
+                const end = endOfDay(toDate(e.endDate));
+                return isWithinInterval(day, { start, end });
+            }).length === 0;
+         }) && (
              <div className="text-center py-10 text-gray-400 dark:text-slate-500 flex flex-col items-center gap-2">
                  <Calendar size={48} className="opacity-20" />
                  <span>Brak wydarzeń w tym miesiącu.</span>
